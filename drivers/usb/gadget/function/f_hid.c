@@ -76,6 +76,11 @@ struct f_hidg {
 	wait_queue_head_t		write_queue;
 	struct usb_request		*req;
 
+	/* set report */
+	struct list_head		completed_set_req;
+	spinlock_t			set_spinlock;
+	wait_queue_head_t		set_queue;
+
 	/* get report */
 	struct usb_request		*get_req;
 	struct usb_hidg_report		get_report;
@@ -531,6 +536,54 @@ release_write_pending:
 	return status;
 }
 
+static int f_hidg_set_report(struct file *file, struct usb_hidg_report __user *buffer)
+{
+	struct f_hidg		*hidg = file->private_data;
+	struct f_hidg_req_list	*list;
+	struct usb_request	*req;
+	unsigned long		flags;
+	unsigned short		length;
+	int			status;
+
+	spin_lock_irqsave(&hidg->set_spinlock, flags);
+
+#define SET_REPORT_COND (!list_empty(&hidg->completed_set_req))
+
+	/* wait for at least one buffer to complete */
+	while (!SET_REPORT_COND) {
+		spin_unlock_irqrestore(&hidg->set_spinlock, flags);
+		if (file->f_flags & O_NONBLOCK)
+			return -EAGAIN;
+
+		if (wait_event_interruptible(hidg->set_queue, SET_REPORT_COND))
+			return -ERESTARTSYS;
+
+		spin_lock_irqsave(&hidg->set_spinlock, flags);
+	}
+
+	/* pick the first one */
+	list = list_first_entry(&hidg->completed_set_req,
+				struct f_hidg_req_list, list);
+
+	/*
+	 * Remove this from list to protect it from being free()
+	 * while host disables our function
+	 */
+	list_del(&list->list);
+
+	req = list->req;
+	spin_unlock_irqrestore(&hidg->set_spinlock, flags);
+
+	/* copy to user outside spinlock */
+	length = min_t(unsigned short, sizeof(buffer->data), req->actual);
+	status = copy_to_user(&buffer->length, &length, sizeof(buffer->length));
+	if (!status) {
+	    status = copy_to_user(&buffer->data, req->buf, length);
+	}
+	kfree(list);
+	free_ep_req(hidg->func.config->cdev->gadget->ep0, req);
+	return status;
+}
 
 static int f_hidg_get_report(struct file *file, struct usb_hidg_report __user *buffer)
 {
@@ -582,6 +635,8 @@ static int f_hidg_get_report(struct file *file, struct usb_hidg_report __user *b
 static long f_hidg_ioctl(struct file *file, unsigned int code, unsigned long arg)
 {
 	switch (code) {
+	case GADGET_HID_READ_SET_REPORT:
+		return f_hidg_set_report(file, (struct usb_hidg_report __user *)arg);
 	case GADGET_HID_WRITE_GET_REPORT:
 		return f_hidg_get_report(file, (struct usb_hidg_report __user *)arg);
 	default:
@@ -596,6 +651,7 @@ static __poll_t f_hidg_poll(struct file *file, poll_table *wait)
 
 	poll_wait(file, &hidg->read_queue, wait);
 	poll_wait(file, &hidg->write_queue, wait);
+	poll_wait(file, &hidg->set_queue, wait);
 
 	if (WRITE_COND)
 		ret |= EPOLLOUT | EPOLLWRNORM;
@@ -608,12 +664,16 @@ static __poll_t f_hidg_poll(struct file *file, poll_table *wait)
 			ret |= EPOLLIN | EPOLLRDNORM;
 	}
 
+	if (SET_REPORT_COND)
+		ret |= EPOLLPRI;
+
 	return ret;
 }
 
 #undef WRITE_COND
 #undef READ_COND_SSREPORT
 #undef READ_COND_INTOUT
+#undef SET_REPORT_COND
 #undef GET_REPORT_COND
 
 static int f_hidg_release(struct inode *inode, struct file *fd)
@@ -658,11 +718,19 @@ static void hidg_intout_complete(struct usb_ep *ep, struct usb_request *req)
 
 		req_list->req = req;
 
-		spin_lock_irqsave(&hidg->read_spinlock, flags);
-		list_add_tail(&req_list->list, &hidg->completed_out_req);
-		spin_unlock_irqrestore(&hidg->read_spinlock, flags);
+		if (ep == cdev->gadget->ep0) {
+			spin_lock_irqsave(&hidg->set_spinlock, flags);
+			list_add_tail(&req_list->list, &hidg->completed_set_req);
+			spin_unlock_irqrestore(&hidg->set_spinlock, flags);
 
-		wake_up(&hidg->read_queue);
+			wake_up(&hidg->set_queue);
+		} else {
+			spin_lock_irqsave(&hidg->read_spinlock, flags);
+			list_add_tail(&req_list->list, &hidg->completed_out_req);
+			spin_unlock_irqrestore(&hidg->read_spinlock, flags);
+
+			wake_up(&hidg->read_queue);
+		}
 		break;
 	default:
 		ERROR(cdev, "Set report failed %d\n", req->status);
@@ -775,12 +843,27 @@ static int hidg_setup(struct usb_function *f,
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8
 		  | HID_REQ_SET_REPORT):
 		VDBG(cdev, "set_report | wLength=%d\n", ctrl->wLength);
-		if (hidg->use_out_ep)
+		if (!hidg->use_out_ep) {
+			req->complete = hidg_ssreport_complete;
+			req->context  = hidg;
+			goto respond;
+		}
+		if (!length)
 			goto stall;
-		req->complete = hidg_ssreport_complete;
+		req = alloc_ep_req(cdev->gadget->ep0, GFP_ATOMIC);
+		if (!req)
+			return -ENOMEM;
+		req->complete = hidg_intout_complete;
 		req->context  = hidg;
-		goto respond;
-		break;
+		req->zero = 0;
+		req->length = length;
+		status = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
+		if (status < 0) {
+			ERROR(cdev, "usb_ep_queue error on set_report %d\n", status);
+			free_ep_req(cdev->gadget->ep0, req);
+		}
+
+		return status;
 
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8
 		  | HID_REQ_SET_PROTOCOL):
@@ -879,6 +962,14 @@ static void hidg_disable(struct usb_function *f)
 		}
 		spin_unlock_irqrestore(&hidg->read_spinlock, flags);
 	}
+
+	spin_lock_irqsave(&hidg->set_spinlock, flags);
+	list_for_each_entry_safe(list, next, &hidg->completed_set_req, list) {
+		free_ep_req(f->config->cdev->gadget->ep0, list->req);
+		list_del(&list->list);
+		kfree(list);
+	}
+	spin_unlock_irqrestore(&hidg->set_spinlock, flags);
 
 	spin_lock_irqsave(&hidg->write_spinlock, flags);
 	if (!hidg->write_pending) {
@@ -1108,11 +1199,14 @@ static int hidg_bind(struct usb_configuration *c, struct usb_function *f)
 	hidg->write_pending = 1;
 	hidg->req = NULL;
 	spin_lock_init(&hidg->read_spinlock);
+	spin_lock_init(&hidg->set_spinlock);
 	spin_lock_init(&hidg->get_spinlock);
 	init_waitqueue_head(&hidg->write_queue);
 	init_waitqueue_head(&hidg->read_queue);
+	init_waitqueue_head(&hidg->set_queue);
 	init_waitqueue_head(&hidg->get_queue);
 	INIT_LIST_HEAD(&hidg->completed_out_req);
+	INIT_LIST_HEAD(&hidg->completed_set_req);
 
 	/* create char device */
 	cdev_init(&hidg->cdev, &f_hidg_fops);
