@@ -97,7 +97,7 @@ static inline struct fixed31_32 amdgpu_dm_fixpt_from_s3132(__u64 x)
 	return val;
 }
 
-#ifdef AMD_PRIVATE_COLOR
+#ifdef CONFIG_DRM_AMD_COLOR_STEAMDECK
 /* Pre-defined Transfer Functions (TF)
  *
  * AMD driver supports pre-defined mathematical functions for transferring
