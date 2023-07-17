@@ -6784,6 +6784,14 @@ amdgpu_dm_connector_atomic_check(struct drm_connector *conn,
 		new_crtc_state->mode_changed = true;
 	}
 
+	if (new_con_state->content_type != old_con_state->content_type) {
+		new_crtc_state = drm_atomic_get_crtc_state(state, crtc);
+		if (IS_ERR(new_crtc_state))
+			return PTR_ERR(new_crtc_state);
+
+		new_crtc_state->mode_changed = true;
+	}
+
 	if (!drm_connector_atomic_hdr_metadata_equal(old_con_state, new_con_state)) {
 		struct dc_info_packet hdr_infopacket;
 
