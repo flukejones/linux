@@ -170,12 +170,24 @@ static const struct dmi_system_id orientation_data[] = {
 		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "T103HAF"),
 		},
 		.driver_data = (void *)&lcd800x1280_rightside_up,
-	}, {	/* AYA NEO 2021 */
+        }, {    /* AYANEO AYANEO 2 */
+                .matches = {
+                  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AYANEO"),
+                  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AYANEO 2"),
+                },
+                .driver_data = (void *)&lcd1200x1920_rightside_up,
+	}, {	/* AYA NEO 2021 and variants */
 		.matches = {
-		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AYADEVICE"),
-		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AYA NEO 2021"),
-		},
-		.driver_data = (void *)&lcd800x1280_rightside_up,
+		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AYANEO"),
+		  DMI_MATCH(DMI_PRODUCT_NAME, "2021"),
+                },
+                .driver_data = (void *)&lcd800x1280_rightside_up,
+        }, {    /* AYA NEO Founder */
+                .matches = {
+                  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AYA NEO"),
+                  DMI_MATCH(DMI_PRODUCT_NAME, "AYA NEO Founder"),
+                },
+                .driver_data = (void *)&lcd800x1280_rightside_up,
 	}, {	/* AYA NEO AIR */
 		.matches = {
 		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AYANEO"),
@@ -188,6 +200,12 @@ static const struct dmi_system_id orientation_data[] = {
 		  DMI_MATCH(DMI_BOARD_NAME, "NEXT"),
 		},
 		.driver_data = (void *)&lcd800x1280_rightside_up,
+        }, {    /* AYA NEO GEEK */
+                .matches = {
+                  DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                  DMI_MATCH(DMI_BOARD_NAME, "GEEK"),
+                },
+                .driver_data = (void *)&lcd800x1280_rightside_up,
 	}, {	/* Chuwi HiBook (CWI514) */
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "Hampoo"),
