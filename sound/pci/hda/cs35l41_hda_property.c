@@ -97,14 +97,9 @@ static int asus_rog_2023_ally_fix(struct cs35l41_hda *cs35l41, struct device *ph
 	cs35l41->reset_gpio = gpiod_get_index(physdev, NULL, 0, GPIOD_OUT_HIGH);
 	cs35l41->speaker_id = cs35l41_get_speaker_id(physdev, 0, 0, 2);
 	hw_cfg->spk_pos = cs35l41->index;
-	hw_cfg->gpio1.func = CS35L41_NOT_USED;
-	hw_cfg->gpio1.valid = true;
 	hw_cfg->gpio2.func = CS35L41_INTERRUPT;
 	hw_cfg->gpio2.valid = true;
-	hw_cfg->bst_type = CS35L41_INT_BOOST;
-	hw_cfg->bst_ind = 1000; /* 1,000nH Inductance value */
-	hw_cfg->bst_ipk = 4500; /* 4,500mA peak current */
-	hw_cfg->bst_cap = 24; /* 24 microFarad cap value */
+	hw_cfg->bst_type = CS35L41_EXT_BOOST_NO_VSPK_SWITCH;
 	hw_cfg->valid = true;
 
 	return 0;
