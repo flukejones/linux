@@ -45,6 +45,8 @@ enum oxp_board {
 	aya_neo_air,
 	aya_neo_air_pro,
 	aya_neo_geek,
+	oxp_2,
+	oxp_fly,
 	oxp_mini_amd,
 	oxp_mini_amd_a07,
 	oxp_mini_amd_pro,
@@ -58,16 +60,17 @@ static enum oxp_board board;
 #define OXP_SENSOR_PWM_REG		0x4B /* PWM reading is 1 register long */
 
 /* Turbo button takeover function
- * Older boards have different values and EC registers
+ * Different boards have different values and EC registers
  * for the same function
  */
-#define OXP_OLD_TURBO_SWITCH_REG	0x1E
-#define OXP_OLD_TURBO_TAKE_VAL		0x01
-#define OXP_OLD_TURBO_RETURN_VAL	0x00
-
 #define OXP_TURBO_SWITCH_REG		0xF1
 #define OXP_TURBO_TAKE_VAL		0x40
-#define OXP_TURBO_RETURN_VAL		0x00
+#define OXP_TURBO_RETURN_VAL		0x00 /* Common return val */
+
+#define OXP_2_TURBO_SWITCH_REG		0xEB /* OXP2 and OXP2 Pro */
+#define OXP_MINI_TURBO_SWITCH_REG	0x1E /* Mini AO7 */
+#define OXP_MINI_TURBO_TAKE_VAL		0x01
+
 
 static const struct dmi_system_id dmi_table[] = {
 	{
@@ -118,6 +121,34 @@ static const struct dmi_system_id dmi_table[] = {
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONE XPLAYER"),
 		},
 		.driver_data = (void *)oxp_mini_amd,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER 2 ARP23"),
+		},
+		.driver_data = (void *)oxp_2,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER 2 PRO ARP23P"),
+		},
+		.driver_data = (void *)oxp_2,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER 2 PRO ARP23P EVA-01"),
+		},
+		.driver_data = (void *)oxp_2,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ONE-NETBOOK"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "ONEXPLAYER F1"),
+		},
+		.driver_data = (void *)oxp_fly,
 	},
 	{
 		.matches = {
@@ -184,12 +215,17 @@ static int tt_toggle_enable(void)
 
 	switch (board) {
 	case oxp_mini_amd_a07:
-		reg = OXP_OLD_TURBO_SWITCH_REG;
-		val = OXP_OLD_TURBO_TAKE_VAL;
+		reg = OXP_MINI_TURBO_SWITCH_REG;
+		val = OXP_MINI_TURBO_TAKE_VAL;
 		break;
-	case oxp_mini_amd_pro:
 	case aok_zoe_a1:
+	case oxp_fly:
+	case oxp_mini_amd_pro:
 		reg = OXP_TURBO_SWITCH_REG;
+		val = OXP_TURBO_TAKE_VAL;
+		break;
+	case oxp_2:
+		reg = OXP_2_TURBO_SWITCH_REG;
 		val = OXP_TURBO_TAKE_VAL;
 		break;
 	default:
@@ -205,12 +241,17 @@ static int tt_toggle_disable(void)
 
 	switch (board) {
 	case oxp_mini_amd_a07:
-		reg = OXP_OLD_TURBO_SWITCH_REG;
-		val = OXP_OLD_TURBO_RETURN_VAL;
+		reg = OXP_MINI_TURBO_SWITCH_REG;
+		val = OXP_TURBO_RETURN_VAL;
 		break;
-	case oxp_mini_amd_pro:
 	case aok_zoe_a1:
+	case oxp_fly:
+	case oxp_mini_amd_pro:
 		reg = OXP_TURBO_SWITCH_REG;
+		val = OXP_TURBO_RETURN_VAL;
+		break;
+	case oxp_2:
+		reg = OXP_2_TURBO_SWITCH_REG;
 		val = OXP_TURBO_RETURN_VAL;
 		break;
 	default:
@@ -220,20 +261,6 @@ static int tt_toggle_disable(void)
 }
 
 /* Callbacks for turbo toggle attribute */
-static umode_t tt_toggle_is_visible(struct kobject *kobj,
-				    struct attribute *attr, int n)
-{
-	switch (board) {
-	case aok_zoe_a1:
-	case oxp_mini_amd_a07:
-	case oxp_mini_amd_pro:
-		return attr->mode;
-	default:
-		break;
-	}
-	return 0;
-}
-
 static ssize_t tt_toggle_store(struct device *dev,
 			       struct device_attribute *attr, const char *buf,
 			       size_t count)
@@ -265,11 +292,15 @@ static ssize_t tt_toggle_show(struct device *dev,
 
 	switch (board) {
 	case oxp_mini_amd_a07:
-		reg = OXP_OLD_TURBO_SWITCH_REG;
+		reg = OXP_MINI_TURBO_SWITCH_REG;
 		break;
-	case oxp_mini_amd_pro:
 	case aok_zoe_a1:
+	case oxp_fly:
+	case oxp_mini_amd_pro:
 		reg = OXP_TURBO_SWITCH_REG;
+		break;
+	case oxp_2:
+		reg = OXP_2_TURBO_SWITCH_REG;
 		break;
 	default:
 		return -EINVAL;
@@ -338,8 +369,10 @@ static int oxp_platform_read(struct device *dev, enum hwmon_sensor_types type,
 			case oxp_mini_amd_a07:
 				*val = (*val * 255) / 100;
 				break;
-			case oxp_mini_amd_pro:
 			case aok_zoe_a1:
+			case oxp_2:
+			case oxp_fly:
+			case oxp_mini_amd_pro:
 			default:
 				break;
 			}
@@ -381,6 +414,8 @@ static int oxp_platform_write(struct device *dev, enum hwmon_sensor_types type,
 				val = (val * 100) / 255;
 				break;
 			case aok_zoe_a1:
+			case oxp_2:
+			case oxp_fly:
 			case oxp_mini_amd_pro:
 			default:
 				break;
@@ -410,15 +445,7 @@ static struct attribute *oxp_ec_attrs[] = {
 	NULL
 };
 
-static struct attribute_group oxp_ec_attribute_group = {
-	.is_visible = tt_toggle_is_visible,
-	.attrs = oxp_ec_attrs,
-};
-
-static const struct attribute_group *oxp_ec_groups[] = {
-	&oxp_ec_attribute_group,
-	NULL
-};
+ATTRIBUTE_GROUPS(oxp_ec);
 
 static const struct hwmon_ops oxp_ec_hwmon_ops = {
 	.is_visible = oxp_ec_hwmon_is_visible,
@@ -434,28 +461,10 @@ static const struct hwmon_chip_info oxp_ec_chip_info = {
 /* Initialization logic */
 static int oxp_platform_probe(struct platform_device *pdev)
 {
+	const struct dmi_system_id *dmi_entry;
 	struct device *dev = &pdev->dev;
 	struct device *hwdev;
-
-	hwdev = devm_hwmon_device_register_with_info(dev, "oxpec", NULL,
-						     &oxp_ec_chip_info, NULL);
-
-	return PTR_ERR_OR_ZERO(hwdev);
-}
-
-static struct platform_driver oxp_platform_driver = {
-	.driver = {
-		.name = "oxp-platform",
-		.dev_groups = oxp_ec_groups,
-	},
-	.probe = oxp_platform_probe,
-};
-
-static struct platform_device *oxp_platform_device;
-
-static int __init oxp_platform_init(void)
-{
-	const struct dmi_system_id *dmi_entry;
+	int ret;
 
 	/*
 	 * Have to check for AMD processor here because DMI strings are the
@@ -470,6 +479,37 @@ static int __init oxp_platform_init(void)
 
 	board = (enum oxp_board)(unsigned long)dmi_entry->driver_data;
 
+	switch (board) {
+	case aok_zoe_a1:
+	case oxp_2:
+	case oxp_fly:
+	case oxp_mini_amd_a07:
+	case oxp_mini_amd_pro:
+		ret = devm_device_add_groups(dev, oxp_ec_groups);
+		if (ret)
+			return ret;
+		break;
+	default:
+		break;
+	}
+
+	hwdev = devm_hwmon_device_register_with_info(dev, "oxpec", NULL,
+						     &oxp_ec_chip_info, NULL);
+
+	return PTR_ERR_OR_ZERO(hwdev);
+}
+
+static struct platform_driver oxp_platform_driver = {
+	.driver = {
+		.name = "oxp-platform",
+	},
+	.probe = oxp_platform_probe,
+};
+
+static struct platform_device *oxp_platform_device;
+
+static int __init oxp_platform_init(void)
+{
 	oxp_platform_device =
 		platform_create_bundle(&oxp_platform_driver,
 				       oxp_platform_probe, NULL, 0, NULL, 0);
