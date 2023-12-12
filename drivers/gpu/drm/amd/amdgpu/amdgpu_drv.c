@@ -167,10 +167,10 @@ char *amdgpu_disable_cu;
 char *amdgpu_virtual_display;
 bool enforce_isolation;
 /*
- * OverDrive(bit 14) disabled by default
+ * OverDrive(bit 14) enabled by default
  * GFX DCS(bit 19) disabled by default
  */
-uint amdgpu_pp_feature_mask = 0xfff7bfff;
+uint amdgpu_pp_feature_mask = 0xfff7ffff;
 uint amdgpu_force_long_training;
 int amdgpu_lbpw = -1;
 int amdgpu_compute_multipipe = -1;
