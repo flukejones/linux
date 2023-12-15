@@ -191,9 +191,6 @@ amdgpu_dm_create_color_properties(struct amdgpu_device *adev)
 {
 	struct drm_property *prop;
 
-	if (adev->asic_type < CHIP_SIENNA_CICHLID)
-		return 0;
-
 	prop = drm_property_create(adev_to_drm(adev),
 				   DRM_MODE_PROP_BLOB,
 				   "VALVE1_PLANE_DEGAMMA_LUT", 0);
