@@ -149,7 +149,7 @@ static const u8 accel3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0C,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 0x0A, 0x54, 0x04,	/* HID usage sensor data motion Acceleration Y axis */
 0x17, 0X00, 0X00, 0x01, 0x80, /* HID logical Min_32 */
@@ -158,7 +158,7 @@ static const u8 accel3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0C,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 0x0A, 0x55, 0x04,	/* HID usage sensor data motion Acceleration Z axis */
 0x17, 0X00, 0X00, 0x01, 0x80, /* HID logical Min_32 */
@@ -167,7 +167,7 @@ static const u8 accel3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0C,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 
 0x0A, 0x51, 0x04,	/* HID usage sensor data motion state */
@@ -316,7 +316,7 @@ static const u8 gyro3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0B,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 0x0A, 0x58, 0x04,	/* Sensor data motion Angular velocity  Y axis */
 0x17, 0x00, 0x00, 0x01, 0x80, /* HID logical Min_32 */
@@ -325,7 +325,7 @@ static const u8 gyro3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0B,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 0x0A, 0x59, 0x04,	/* Sensor data motion Angular velocity  Z axis */
 0x17, 0x00, 0x00, 0x01, 0x80, /* HID logical Min_32 */
@@ -334,7 +334,7 @@ static const u8 gyro3_report_descriptor[] = {
 
 0x75, 32,		/* HID report size(32) */
 0x95, 1,		/* HID report count (1) */
-0x55, 0x0E,		/* HID unit exponent(0x0E) */
+0x55, 0x0B,		/* HID unit exponent(0x0E) */
 0X81, 0x02,		/* HID Input (Data_Arr_Abs) */
 
 0xC0,			/* HID end collection */
