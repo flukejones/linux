@@ -998,10 +998,9 @@ static ssize_t ppt_pl2_sppt_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1042,10 +1041,9 @@ static ssize_t ppt_pl1_spl_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1085,10 +1083,9 @@ static ssize_t ppt_fppt_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1129,10 +1126,9 @@ static ssize_t ppt_apu_sppt_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1173,10 +1169,9 @@ static ssize_t ppt_platform_sppt_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1217,10 +1212,9 @@ static ssize_t nv_dynamic_boost_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
@@ -1261,10 +1255,9 @@ static ssize_t nv_temp_target_store(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
+	struct asus_wmi *asus = dev_get_drvdata(dev);
 	int result, err;
 	u32 value;
-
-	struct asus_wmi *asus = dev_get_drvdata(dev);
 
 	result = kstrtou32(buf, 10, &value);
 	if (result)
