@@ -42,9 +42,14 @@ static bool unlock_global_acpi_lock(void)
 enum oxp_board {
 	aok_zoe_a1 = 1,
 	aya_neo_2,
+	aya_neo_2s,
 	aya_neo_air,
+	aya_neo_air_1s,
+	aya_neo_air_plus_mendo,
 	aya_neo_air_pro,
 	aya_neo_geek,
+	aya_neo_geek_1s,
+	aya_neo_kun,
 	orange_pi_neo,
 	oxp_2,
 	oxp_fly,
@@ -103,9 +108,23 @@ static const struct dmi_system_id dmi_table[] = {
 	{
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 2S"),
+		},
+		.driver_data = (void *)aya_neo_2s,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR"),
 		},
 		.driver_data = (void *)aya_neo_air,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR 1S"),
+		},
+		.driver_data = (void *)aya_neo_air_1s,
 	},
 	{
 		.matches = {
@@ -120,6 +139,20 @@ static const struct dmi_system_id dmi_table[] = {
 			DMI_EXACT_MATCH(DMI_BOARD_NAME, "GEEK"),
 		},
 		.driver_data = (void *)aya_neo_geek,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "GEEK 1S"),
+		},
+		.driver_data = (void *)aya_neo_geek_1s,
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+			DMI_EXACT_MATCH(DMI_BOARD_NAME, "KUN"),
+		},
+		.driver_data = (void *)aya_neo_kun,
 	},
 	{
 		.matches = {
@@ -352,10 +385,14 @@ static int oxp_pwm_enable(void)
 		return write_to_ec(ORANGEPI_SENSOR_PWM_ENABLE_REG, PWM_MODE_MANUAL);
 	case aok_zoe_a1:
 	case aya_neo_2:
+	case aya_neo_2s:
 	case aya_neo_air:
+	case aya_neo_air_1s:
 	case aya_neo_air_plus_mendo:
 	case aya_neo_air_pro:
 	case aya_neo_geek:
+	case aya_neo_geek_1s:
+	case aya_neo_kun:
 	case oxp_mini_amd:
 	case oxp_mini_amd_a07:
 	case oxp_2:
@@ -374,10 +411,14 @@ static int oxp_pwm_disable(void)
 		return write_to_ec(ORANGEPI_SENSOR_PWM_ENABLE_REG, PWM_MODE_AUTO);
 	case aok_zoe_a1:
 	case aya_neo_2:
+	case aya_neo_2s:
 	case aya_neo_air:
+	case aya_neo_air_1s:
 	case aya_neo_air_plus_mendo:
 	case aya_neo_air_pro:
 	case aya_neo_geek:
+	case aya_neo_geek_1s:
+	case aya_neo_kun:
 	case oxp_mini_amd:
 	case oxp_mini_amd_a07:
 	case oxp_2:
@@ -417,10 +458,14 @@ static int oxp_platform_read(struct device *dev, enum hwmon_sensor_types type,
 				return read_from_ec(ORANGEPI_SENSOR_FAN_REG, 2, val);
 			case aok_zoe_a1:
 			case aya_neo_2:
+			case aya_neo_2s:
 			case aya_neo_air:
+			case aya_neo_air_1s:
 			case aya_neo_air_plus_mendo:
 			case aya_neo_air_pro:
 			case aya_neo_geek:
+			case aya_neo_geek_1s:
+			case aya_neo_kun:
 			case oxp_mini_amd:
 			case oxp_mini_amd_a07:
 			case oxp_2:
@@ -473,10 +518,14 @@ static int oxp_platform_read(struct device *dev, enum hwmon_sensor_types type,
 				return read_from_ec(ORANGEPI_SENSOR_PWM_ENABLE_REG, 1, val);
 			case aok_zoe_a1:
 			case aya_neo_2:
+			case aya_neo_2s:
 			case aya_neo_air:
+			case aya_neo_air_1s:
 			case aya_neo_air_plus_mendo:
 			case aya_neo_air_pro:
 			case aya_neo_geek:
+			case aya_neo_geek_1s:
+			case aya_neo_kun:
 			case oxp_mini_amd:
 			case oxp_mini_amd_a07:
 			case oxp_2:
