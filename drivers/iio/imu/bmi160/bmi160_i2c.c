@@ -44,6 +44,7 @@ MODULE_DEVICE_TABLE(i2c, bmi160_i2c_id);
 
 static const struct acpi_device_id bmi160_acpi_match[] = {
 	{"BMI0160", 0},
+	{"10EC5280", 0}, /* AYA NEO tablet */
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, bmi160_acpi_match);
