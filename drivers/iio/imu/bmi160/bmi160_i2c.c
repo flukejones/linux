@@ -53,6 +53,7 @@ static const struct acpi_device_id bmi160_acpi_match[] = {
 	 */
 	{"10EC5280", 0},
 	{"BMI0160", 0},
+	{"10EC5280", 0}, /* AYA NEO tablet */
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, bmi160_acpi_match);
