@@ -324,12 +324,12 @@ static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 	profile_name = aw87xxx_acf_get_prof_name_form_index(aw87xxx->dev,
 		&aw87xxx->acf_info, count);
 	if (profile_name == NULL) {
-		strlcpy(uinfo->value.enumerated.name, "NULL",
+		strscpy(uinfo->value.enumerated.name, "NULL",
 			strlen("NULL") + 1);
 		return 0;
 	}
 
-	strlcpy(name, profile_name, sizeof(uinfo->value.enumerated.name));
+	strscpy(name, profile_name, sizeof(uinfo->value.enumerated.name));
 
 	return 0;
 }
@@ -450,7 +450,7 @@ static int aw87xxx_monitor_switch_info(struct snd_kcontrol *kcontrol,
 	if (uinfo->value.enumerated.item >= count)
 		uinfo->value.enumerated.item = count - 1;
 
-	strlcpy(uinfo->value.enumerated.name,
+	strscpy(uinfo->value.enumerated.name,
 		aw87xxx_monitor_switch[uinfo->value.enumerated.item],
 		strlen(aw87xxx_monitor_switch[uinfo->value.enumerated.item]) + 1);
 
@@ -498,7 +498,7 @@ static int aw87xxx_spin_switch_info(struct snd_kcontrol *kcontrol,
 	if (uinfo->value.enumerated.item >= count)
 		uinfo->value.enumerated.item = count - 1;
 
-	strlcpy(uinfo->value.enumerated.name,
+	strscpy(uinfo->value.enumerated.name,
 		aw87xxx_spin_switch[uinfo->value.enumerated.item],
 		strlen(aw87xxx_spin_switch[uinfo->value.enumerated.item]) + 1);
 
