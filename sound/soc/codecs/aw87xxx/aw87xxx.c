@@ -59,7 +59,7 @@
 #define AW87XXX_I2C_NAME	"aw87xxx_pa"
 #define AW87XXX_DRIVER_VERSION	"v2.7.0"
 #define AW87XXX_FW_BIN_NAME	"aw87xxx_acf.bin"
-
+#define AW87XXX_PROF_MUSIC	"Music"
 /*************************************************************************
  * aw87xxx variable
  ************************************************************************/
@@ -785,6 +785,9 @@ static void aw87xxx_fw_load(const struct firmware *fw, void *context)
 	AW_DEV_LOGI(aw87xxx->dev, "acf parse succeed");
 	mutex_unlock(&aw87xxx->reg_lock);
 	release_firmware(fw);
+	// Updating profile to "Music" because the firmware is set to "off" during init
+	aw87xxx_update_profile(aw87xxx, AW87XXX_PROF_MUSIC);
+
 	return;
 
 exit_acf_parse_failed:
@@ -1255,12 +1258,6 @@ static const struct acpi_gpio_mapping reset_acpi_gpios[] = {
   { }
 };
 
-static const struct acpi_device_id aw87xxx_acpi_match[] = {
-        { "AWDZ8830", 0 },
-	{ }
-};
-MODULE_DEVICE_TABLE(acpi, aw87xxx_acpi_match);
-
 static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
 {
 	struct aw87xxx *aw87xxx = NULL;
@@ -1291,13 +1288,13 @@ static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
 	return aw87xxx;
 }
 
-static int aw87xxx_i2c_probe(struct i2c_client *client) //,	const struct i2c_device_id *id)
+static int aw87xxx_i2c_probe(struct i2c_client *client)
 {
 	struct device_node *dev_node = client->dev.of_node;
 	struct aw87xxx *aw87xxx = NULL;
 	struct gpio_desc *gpiod = NULL;
 	int ret = -1;
-	
+
 
 // To do, add this function
 //acpi_dev_add_driver_gpios()
@@ -1315,8 +1312,8 @@ static int aw87xxx_i2c_probe(struct i2c_client *client) //,	const struct i2c_dev
 
 	i2c_set_clientdata(client, aw87xxx);
 
-    aw87xxx_device_parse_port_id_dt(&aw87xxx->aw_dev);
-    aw87xxx_device_parse_topo_id_dt(&aw87xxx->aw_dev);
+	aw87xxx_device_parse_port_id_dt(&aw87xxx->aw_dev);
+	aw87xxx_device_parse_topo_id_dt(&aw87xxx->aw_dev);
 
 	/* aw87xxx Get ACPI GPIO */
 /*
@@ -1379,8 +1376,9 @@ static int aw87xxx_i2c_probe(struct i2c_client *client) //,	const struct i2c_dev
 	mutex_lock(&g_aw87xxx_mutex_lock);
 	g_aw87xxx_dev_cnt++;
 	list_add(&aw87xxx->list, &g_aw87xxx_list);
-	mutex_unlock(&g_aw87xxx_mutex_lock);
+	aw87xxx->dev_index = g_aw87xxx_dev_cnt;
 
+	mutex_unlock(&g_aw87xxx_mutex_lock);
 	AW_DEV_LOGI(aw87xxx->dev, "succeed, dev_index=[%d], g_aw87xxx_dev_cnt= [%d]",
 			aw87xxx->dev_index, g_aw87xxx_dev_cnt);
 
@@ -1428,14 +1426,15 @@ static void aw87xxx_i2c_shutdown(struct i2c_client *client)
 	aw87xxx_update_profile(aw87xxx, aw87xxx->prof_off_name);
 }
 
+static const struct acpi_device_id aw87xxx_acpi_match[] = {
+        { "AWDZ8830", 0 },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, aw87xxx_acpi_match);
 
+// This is not necessary if the acpi match probes correctly. This is needed for userspace `new_device() functionality
 static const struct i2c_device_id aw87xxx_i2c_id[] = {
 	{AW87XXX_I2C_NAME, 0},
-	{},
-};
-
-static const struct of_device_id extpa_of_match[] = {
-	{.compatible = "awinic,aw87xxx_pa"},
 	{},
 };
 
@@ -1443,7 +1442,6 @@ static struct i2c_driver aw87xxx_i2c_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = AW87XXX_I2C_NAME,
-		.of_match_table = extpa_of_match,
 		.acpi_match_table = aw87xxx_acpi_match,
 		},
 	.probe = aw87xxx_i2c_probe,
@@ -1452,28 +1450,7 @@ static struct i2c_driver aw87xxx_i2c_driver = {
 	.id_table = aw87xxx_i2c_id,
 };
 
-static int __init aw87xxx_pa_init(void)
-{
-	int ret;
-
-	AW_LOGI("driver version: %s", AW87XXX_DRIVER_VERSION);
-
-	ret = i2c_add_driver(&aw87xxx_i2c_driver);
-	if (ret < 0) {
-		AW_LOGE("Unable to register driver, ret= %d", ret);
-		return ret;
-	}
-	return 0;
-}
-
-static void __exit aw87xxx_pa_exit(void)
-{
-	AW_LOGI("enter");
-	i2c_del_driver(&aw87xxx_i2c_driver);
-}
-
-module_init(aw87xxx_pa_init);
-module_exit(aw87xxx_pa_exit);
+module_i2c_driver(aw87xxx_i2c_driver)
 
 MODULE_AUTHOR("<zhaozhongbo@awinic.com>");
 MODULE_DESCRIPTION("awinic aw87xxx pa driver");
