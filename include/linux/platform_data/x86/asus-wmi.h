@@ -4,6 +4,7 @@
 
 #include <linux/errno.h>
 #include <linux/types.h>
+#include <linux/dmi.h>
 
 /* WMI Methods */
 #define ASUS_WMI_METHODID_SPEC	        0x43455053 /* BIOS SPECification */
@@ -161,6 +162,40 @@ static inline int asus_wmi_evaluate_method(u32 method_id, u32 arg0, u32 arg1,
 #endif
 
 /* To be used by both hid-asus and asus-wmi to determine which controls kbd_brightness */
+static const struct dmi_system_id asus_use_hid_led_dmi_ids[] = {
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "ROG Zephyrus"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "ROG Strix"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "ROG Flow"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "GA403U"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "GU605M"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "RC71L"),
+		},
+	},
+	{ },
+};
+
 static const struct dmi_system_id asus_ally_mcu_quirk[] = {
 	{
 		.matches = {
