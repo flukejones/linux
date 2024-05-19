@@ -68,13 +68,6 @@ extern "C" {
  */
 #define NOUVEAU_GETPARAM_VRAM_USED 19
 
-/*
- * NOUVEAU_GETPARAM_HAS_VMA_TILEMODE
- *
- * Query whether tile mode and PTE kind are accepted with VM allocs or not.
- */
-#define NOUVEAU_GETPARAM_HAS_VMA_TILEMODE 20
-
 struct drm_nouveau_getparam {
 	__u64 param;
 	__u64 value;
