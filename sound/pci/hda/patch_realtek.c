@@ -20,6 +20,7 @@
 #include <linux/input.h>
 #include <linux/leds.h>
 #include <linux/ctype.h>
+#include <linux/dmi.h>
 #include <sound/core.h>
 #include <sound/jack.h>
 #include <sound/hda_codec.h>
@@ -7285,8 +7286,8 @@ enum {
 	ALC269_FIXUP_DELL4_MIC_NO_PRESENCE,
 	ALC269_FIXUP_DELL4_MIC_NO_PRESENCE_QUIET,
 	ALC269_FIXUP_HEADSET_MODE,
-	ALC269_FIXUP_HEADSET_AYA_2,
-	ALC269_FIXUP_HEADSET_AYA_GEEK,
+ 	ALC269_FIXUP_DMI_MATCH,
+ 	ALC269_FIXUP_AYA_HEADSET_VOLUME,
 	ALC269_FIXUP_HEADSET_MODE_NO_HP_MIC,
 	ALC269_FIXUP_ASPIRE_HEADSET_MIC,
 	ALC269_FIXUP_ASUS_X101_FUNC,
@@ -7300,6 +7301,7 @@ enum {
 	ALC269VB_FIXUP_ASUS_ZENBOOK,
 	ALC269VB_FIXUP_ASUS_ZENBOOK_UX31A,
 	ALC269VB_FIXUP_ASUS_MIC_NO_PRESENCE,
+	ALC269VB_FIXUP_AYN_SPKR_PIN_FIX,
 	ALC269_FIXUP_LIMIT_INT_MIC_BOOST_MUTE_LED,
 	ALC269VB_FIXUP_ORDISSIMO_EVE2,
 	ALC283_FIXUP_CHROME_BOOK,
@@ -7532,6 +7534,69 @@ enum {
 	ALC285_FIXUP_ASUS_GU605_SPI_SPEAKER2_TO_DAC1,
 	ALC287_FIXUP_LENOVO_THKPAD_WH_ALC1318,
 };
+
+static const struct dmi_system_id alc269_fixup_dmi_tbl[] = {
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 2"),
+                },
+                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
+        },
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 2S"),
+                },
+                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
+        },
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR"),
+                },
+                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
+        },
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR Pro"),
+                },
+                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
+        },
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "GEEK"),
+                },
+                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
+        },
+        {
+                .matches = {
+                        DMI_MATCH(DMI_BOARD_VENDOR, "AYN"),
+                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "LOKI MINIPRO"),
+                },
+                .driver_data = (void *)ALC269VB_FIXUP_AYN_SPKR_PIN_FIX,
+        },
+        {},
+};
+
+static void alc269_fixup_match_via_dmi(struct hda_codec *codec,
+                                        const struct hda_fixup *fix, int action)
+{
+        const struct dmi_system_id *dmi_entry;
+        int alc269_fix_id;
+
+        dmi_entry = dmi_first_match(alc269_fixup_dmi_tbl);
+
+        if (!dmi_entry)
+                return;
+
+        alc269_fix_id = *((int *)dmi_entry->driver_data);
+
+        __snd_hda_apply_fixup(codec, alc269_fix_id, action, 0);
+
+}
 
 /* A special fixup for Lenovo C940 and Yoga Duet 7;
  * both have the very same PCI SSID, and we need to apply different fixups
@@ -8012,6 +8077,14 @@ static const struct hda_fixup alc269_fixups[] = {
 		.chained = true,
 		.chain_id = ALC269_FIXUP_HEADSET_MIC
 	},
+	 [ALC269VB_FIXUP_AYN_SPKR_PIN_FIX] = {
+	         .type = HDA_FIXUP_PINS,
+	         .v.pins = (const struct hda_pintbl[]) {
+	                 { 0x14, 0x40f000f0 },  /* not connected */
+	                 { 0x1a, 0x90170150 },  /* speaker */
+	                 { }
+	         },
+	 },
 	[ALC269_FIXUP_LIMIT_INT_MIC_BOOST_MUTE_LED] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc269_fixup_limit_int_mic_boost,
@@ -8785,11 +8858,11 @@ static const struct hda_fixup alc269_fixups[] = {
 		.chained = true,
 		.chain_id = ALC256_FIXUP_ASUS_HEADSET_MODE
 	},
-	[ALC269_FIXUP_HEADSET_AYA_2] = {
+	[ALC269_FIXUP_DMI_MATCH] = {
 		.type = HDA_FIXUP_FUNC,
-		.v.func = alc269_fixup_headphone_volume,
+		.v.func = alc269_fixup_match_via_dmi,
 	},
-	[ALC269_FIXUP_HEADSET_AYA_GEEK] = {
+	[ALC269_FIXUP_AYA_HEADSET_VOLUME] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc269_fixup_headphone_volume,
 	},
@@ -10605,8 +10678,8 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x1d72, 0x1947, "RedmiBook Air", ALC255_FIXUP_XIAOMI_HEADSET_MIC),
 	SND_PCI_QUIRK(0x2782, 0x0232, "CHUWI CoreBook XPro", ALC269VB_FIXUP_CHUWI_COREBOOK_XPRO),
 	SND_PCI_QUIRK(0x2782, 0x1707, "Vaio VJFE-ADL", ALC298_FIXUP_SPK_VOLUME),
-	SND_PCI_QUIRK(0x1f66, 0x0101, "AYANEO 2", ALC269_FIXUP_HEADSET_AYA_2),
-	SND_PCI_QUIRK(0x1f66, 0x0101, "GEEK", ALC269_FIXUP_HEADSET_AYA_GEEK),
+	SND_PCI_QUIRK(0x1f66, 0x0101, "Multiple Vendors", ALC269_FIXUP_DMI_MATCH),
+	SND_PCI_QUIRK(0x1f66, 0x0103, "AIR Plus", ALC269VB_FIXUP_AYN_SPKR_PIN_FIX),
 	SND_PCI_QUIRK(0x8086, 0x2074, "Intel NUC 8", ALC233_FIXUP_INTEL_NUC8_DMIC),
 	SND_PCI_QUIRK(0x8086, 0x2080, "Intel NUC 8 Rugged", ALC256_FIXUP_INTEL_NUC8_RUGGED),
 	SND_PCI_QUIRK(0x8086, 0x2081, "Intel NUC 10", ALC256_FIXUP_INTEL_NUC10),
@@ -10729,6 +10802,7 @@ static const struct hda_model_fixup alc269_fixup_models[] = {
 	{.id = ALC269VB_FIXUP_ASUS_ZENBOOK, .name = "asus-zenbook"},
 	{.id = ALC269VB_FIXUP_ASUS_ZENBOOK_UX31A, .name = "asus-zenbook-ux31a"},
 	{.id = ALC269VB_FIXUP_ORDISSIMO_EVE2, .name = "ordissimo"},
+	{.id = ALC269VB_FIXUP_AYN_SPKR_PIN_FIX, .name = "ayn-speaker-pin-fix"},
 	{.id = ALC282_FIXUP_ASUS_TX300, .name = "asus-tx300"},
 	{.id = ALC283_FIXUP_INT_MIC, .name = "alc283-int-mic"},
 	{.id = ALC290_FIXUP_MONO_SPEAKERS_HSJACK, .name = "mono-speakers"},
