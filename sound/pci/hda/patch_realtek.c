@@ -7535,67 +7535,23 @@ enum {
 	ALC287_FIXUP_LENOVO_THKPAD_WH_ALC1318,
 };
 
-static const struct dmi_system_id alc269_fixup_dmi_tbl[] = {
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 2"),
-                },
-                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
-        },
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AYANEO 2S"),
-                },
-                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
-        },
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR"),
-                },
-                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
-        },
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "AIR Pro"),
-                },
-                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
-        },
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYANEO"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "GEEK"),
-                },
-                .driver_data = (void *)ALC269_FIXUP_AYA_HEADSET_VOLUME,
-        },
-        {
-                .matches = {
-                        DMI_MATCH(DMI_BOARD_VENDOR, "AYN"),
-                        DMI_EXACT_MATCH(DMI_BOARD_NAME, "LOKI MINIPRO"),
-                },
-                .driver_data = (void *)ALC269VB_FIXUP_AYN_SPKR_PIN_FIX,
-        },
-        {},
-};
-
+/* A special fixup for AYN and AYANEO handhelds as both
+*  have the same PCI SSID as well as the same codec, but
+*  require different quirks, falling back to DMI matching.
+*/
 static void alc269_fixup_match_via_dmi(struct hda_codec *codec,
                                         const struct hda_fixup *fix, int action)
 {
-        const struct dmi_system_id *dmi_entry;
         int alc269_fix_id;
 
-        dmi_entry = dmi_first_match(alc269_fixup_dmi_tbl);
-
-        if (!dmi_entry)
-                return;
-
-        alc269_fix_id = *((int *)dmi_entry->driver_data);
+        if(dmi_name_in_vendors("AYANEO"))
+			alc269_fix_id = ALC269_FIXUP_AYA_HEADSET_VOLUME;
+	else if (dmi_name_in_vendors("ayn"))
+			alc269_fix_id = ALC269VB_FIXUP_AYN_SPKR_PIN_FIX;
+	else
+		return;
 
         __snd_hda_apply_fixup(codec, alc269_fix_id, action, 0);
-
 }
 
 /* A special fixup for Lenovo C940 and Yoga Duet 7;
