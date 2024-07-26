@@ -68,7 +68,7 @@ static struct asus_rog_ally *__rog_ally_data(struct device *raw_dev)
 #define STR_TO_CODE_ELIF(_idx, _code, _label) else if (!strcmp(buf, _label)) out[_idx] = _code;
 
 /* writes the bytes for a requested key/function in to the out buffer */
-const static int __string_to_key_code(const char *buf, u8 *out, int out_len)
+static int __string_to_key_code(const char *buf, u8 *out, int out_len)
 {
 	u8 *save_buf;
 
@@ -260,7 +260,7 @@ success:
 	if (btn_block[_idx] == _code)       \
 		return _label;
 
-const static char *__btn_map_to_string(struct device *raw_dev, enum btn_pair pair,
+static char *__btn_map_to_string(struct device *raw_dev, enum btn_pair pair,
 				       enum btn_pair_side side, bool secondary)
 {
 	struct asus_rog_ally *rog_ally = __rog_ally_data(raw_dev);

@@ -480,3 +480,4 @@ enum btn_pair_side {
 };
 
 static int __gamepad_write_all_to_mcu(struct device *raw_dev);
+void asus_rog_ally_remove(struct hid_device *hdev, const struct rog_ops *ops);
