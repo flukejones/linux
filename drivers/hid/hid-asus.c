@@ -33,6 +33,7 @@
 #include <linux/leds.h>
 
 #include "hid-ids.h"
+#include "hid-asus.h"
 
 MODULE_AUTHOR("Yusuke Fujimaki <usk.fujimaki@gmail.com>");
 MODULE_AUTHOR("Brendan McGrath <redmcg@redmandi.dyndns.org>");
@@ -84,6 +85,7 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define QUIRK_MEDION_E1239T		BIT(10)
 #define QUIRK_ROG_NKEY_KEYBOARD		BIT(11)
 #define QUIRK_ROG_CLAYMORE_II_KEYBOARD BIT(12)
+#define QUIRK_ROG_ALLY_XPAD		BIT(13)
 
 #define I2C_KEYBOARD_QUIRKS			(QUIRK_FIX_NOTEBOOK_REPORT | \
 						 QUIRK_NO_INIT_REPORTS | \
@@ -365,34 +367,13 @@ static int asus_raw_event(struct hid_device *hdev,
 	return 0;
 }
 
-static int asus_kbd_set_report(struct hid_device *hdev, const u8 *buf, size_t buf_size)
-{
-	unsigned char *dmabuf;
-	int ret;
-
-	dmabuf = kmemdup(buf, buf_size, GFP_KERNEL);
-	if (!dmabuf)
-		return -ENOMEM;
-
-	/*
-	 * The report ID should be set from the incoming buffer due to LED and key
-	 * interfaces having different pages
-	*/
-	ret = hid_hw_raw_request(hdev, buf[0], dmabuf,
-				 buf_size, HID_FEATURE_REPORT,
-				 HID_REQ_SET_REPORT);
-	kfree(dmabuf);
-
-	return ret;
-}
-
 static int asus_kbd_init(struct hid_device *hdev, u8 report_id)
 {
 	const u8 buf[] = { report_id, 0x41, 0x53, 0x55, 0x53, 0x20, 0x54,
 		     0x65, 0x63, 0x68, 0x2e, 0x49, 0x6e, 0x63, 0x2e, 0x00 };
 	int ret;
 
-	ret = asus_kbd_set_report(hdev, buf, sizeof(buf));
+	ret = asus_dev_set_report(hdev, buf, sizeof(buf));
 	if (ret < 0)
 		hid_err(hdev, "Asus failed to send init command: %d\n", ret);
 
@@ -407,7 +388,7 @@ static int asus_kbd_get_functions(struct hid_device *hdev,
 	u8 *readbuf;
 	int ret;
 
-	ret = asus_kbd_set_report(hdev, buf, sizeof(buf));
+	ret = asus_dev_set_report(hdev, buf, sizeof(buf));
 	if (ret < 0) {
 		hid_err(hdev, "Asus failed to send configuration command: %d\n", ret);
 		return ret;
@@ -481,7 +462,7 @@ static void asus_kbd_backlight_work(struct work_struct *work)
 	buf[4] = led->brightness;
 	spin_unlock_irqrestore(&led->lock, flags);
 
-	ret = asus_kbd_set_report(led->hdev, buf, sizeof(buf));
+	ret = asus_dev_set_report(led->hdev, buf, sizeof(buf));
 	if (ret < 0)
 		hid_err(led->hdev, "Asus failed to set keyboard backlight: %d\n", ret);
 }
@@ -967,7 +948,7 @@ static int __maybe_unused asus_resume(struct hid_device *hdev) {
 	if (drvdata->kbd_backlight) {
 		const u8 buf[] = { FEATURE_KBD_REPORT_ID, 0xba, 0xc5, 0xc4,
 				drvdata->kbd_backlight->cdev.brightness };
-		ret = asus_kbd_set_report(hdev, buf, sizeof(buf));
+		ret = asus_dev_set_report(hdev, buf, sizeof(buf));
 		if (ret < 0) {
 			hid_err(hdev, "Asus failed to set keyboard backlight: %d\n", ret);
 			goto asus_resume_err;
@@ -1002,6 +983,14 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	hid_set_drvdata(hdev, drvdata);
 
 	drvdata->quirks = id->driver_data;
+
+	/* Ignore these endpoints as they will be used by other drivers */
+	if (drvdata->quirks & QUIRK_ROG_ALLY_XPAD) {
+		struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
+		struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
+		if (ep->desc.bEndpointAddress == ALLY_X_INTERFACE_ADDRESS)
+			return -ENODEV;
+	}
 
 	/*
 	 * T90CHI's keyboard dock returns same ID values as T100CHI's dock.
