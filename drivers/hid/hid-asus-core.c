@@ -361,6 +361,7 @@ int asus_kbd_set_report(struct hid_device *hdev, const u8 *buf, size_t buf_size)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(asus_kbd_set_report);
 
 int asus_kbd_get_report(struct hid_device *hdev, u8 *out_buf, size_t out_buf_size)
 {
@@ -985,6 +986,16 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	hid_set_drvdata(hdev, drvdata);
 
 	drvdata->quirks = id->driver_data;
+
+	// TODO: temporary - use the shared function
+	if (drvdata->quirks & QUIRK_ROG_ALLY_XPAD) {
+		struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
+		struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
+		if (ep->desc.bEndpointAddress == 0x87) {
+		hid_info(hdev, "Ignoring endpoint %x\n", ep->desc.bEndpointAddress);
+			return -ENODEV;
+		}
+	}
 
 	/*
 	 * T90CHI's keyboard dock returns same ID values as T100CHI's dock.
