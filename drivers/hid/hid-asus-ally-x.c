@@ -248,6 +248,9 @@ static int ally_x_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
 	int ret;
 
+	if (id->driver_data != ROG_ALLY_TYPE_X)
+		return -ENODEV;
+
 	if (ep->desc.bEndpointAddress != ALLY_X_INTERFACE_ADDRESS)
 		return -ENODEV;
 

@@ -48,10 +48,7 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define T100CHI_MOUSE_REPORT_ID 0x06
 #define FEATURE_REPORT_ID 0x0d
 #define INPUT_REPORT_ID 0x5d
-#define FEATURE_KBD_REPORT_ID 0x5a
 #define FEATURE_KBD_REPORT_SIZE 16
-#define FEATURE_KBD_LED_REPORT_ID1 0x5d
-#define FEATURE_KBD_LED_REPORT_ID2 0x5e
 
 #define SUPPORT_KBD_BACKLIGHT BIT(0)
 
@@ -988,7 +985,10 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	if (drvdata->quirks & QUIRK_ROG_ALLY_XPAD) {
 		struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
 		struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
-		if (ep->desc.bEndpointAddress == ALLY_X_INTERFACE_ADDRESS)
+
+		if (ep->desc.bEndpointAddress == ALLY_X_INTERFACE_ADDRESS ||
+			ep->desc.bEndpointAddress == ALLY_CFG_INTF_IN_ADDRESS ||
+			ep->desc.bEndpointAddress == ALLY_CFG_INTF_OUT_ADDRESS)
 			return -ENODEV;
 	}
 
@@ -1243,10 +1243,10 @@ static const struct hid_device_id asus_devices[] = {
 	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY),
-	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },
+	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD | QUIRK_ROG_ALLY_XPAD},
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY_X),
-	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },
+	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD | QUIRK_ROG_ALLY_XPAD },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 	    USB_DEVICE_ID_ASUSTEK_ROG_AZOTH_KEYBOARD),
 	  QUIRK_USE_KBD_BACKLIGHT | QUIRK_ROG_NKEY_KEYBOARD },

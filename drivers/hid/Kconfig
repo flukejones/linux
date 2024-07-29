@@ -165,12 +165,19 @@ config HID_ASUS
 	- GL753V series
 
 config HID_ASUS_ALLY_X
-    tristate "Asus Ally X"
+    tristate "Asus Ally X gamepad support"
     depends on USB_HID
-    depends on LEDS_CLASS
-    select POWER_SUPPLY
     help
     Support for Asus ROG Ally X gamepad controller.
+
+config HID_ASUS_ALLY_CFG
+    tristate "Asus Ally gamepad configuration support"
+    depends on USB_HID
+    depends on LEDS_CLASS
+    depends on LEDS_CLASS_MULTICOLOR
+    select POWER_SUPPLY
+    help
+    Support for configuring the Asus ROG Ally gamepad using attributes.
 
 config HID_AUREAL
 	tristate "Aureal"
