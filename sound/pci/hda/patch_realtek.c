@@ -7306,6 +7306,7 @@ enum {
 	ALC269VB_FIXUP_ASUS_ZENBOOK_UX31A,
 	ALC269VB_FIXUP_ASUS_MIC_NO_PRESENCE,
 	ALC269VB_FIXUP_AYANEO_SPKR_PIN_FIX,
+	ALC269VB_FIXUP_AYN_SPKR_PIN_FIX,
 	ALC269_FIXUP_LIMIT_INT_MIC_BOOST_MUTE_LED,
 	ALC269VB_FIXUP_ORDISSIMO_EVE2,
 	ALC283_FIXUP_CHROME_BOOK,
@@ -7549,16 +7550,22 @@ static void alc269_fixup_match_via_dmi(struct hda_codec *codec,
 {
 	int alc269_fix_id;
 	const char *board_name = dmi_get_system_info(DMI_BOARD_NAME);
-
+	
 	if (dmi_name_in_vendors("AYANEO") || dmi_name_in_vendors("AYADEVICE") || dmi_name_in_vendors("AYA DEVICE")) {
+		codec_dbg(codec, "Board Vendor: Ayaneo\n");
 		if (board_name && (strcmp(board_name, "AYANEO 2") || strcmp(board_name, "AYANEO 2S") || strcmp(board_name, "GEEK") || strcmp(board_name, "GEEK 1S"))) {
+			codec_dbg(codec, "Applying: ALC269_FIXUP_AYA_HEADSET_VOLUME\n");
 			alc269_fix_id = ALC269_FIXUP_AYA_HEADSET_VOLUME;
 		} else {
+			codec_dbg(codec, "No matching board found. Applying default settings.\n");
 			return;
 		}	
 	} else if (dmi_name_in_vendors("ayn") && strcmp(board_name, "Loki MiniPro")) {
-		alc269_fix_id = ALC269VB_FIXUP_AYANEO_SPKR_PIN_FIX;
+		codec_dbg(codec, "Board Vendor: Ayn\n");
+		codec_dbg(codec, "Applying: ALC269VB_FIXUP_AYN_SPKR_PIN_FIX\n");
+		alc269_fix_id = ALC269VB_FIXUP_AYN_SPKR_PIN_FIX;
 	} else {
+		codec_dbg(codec, "No matching board found. Applying default settings.\n");
 		return;
 	}
 	__snd_hda_apply_fixup(codec, alc269_fix_id, action, 0);
@@ -8049,6 +8056,14 @@ static const struct hda_fixup alc269_fixups[] = {
 			{ 0x1a, 0x90170110 },
 			{ }
 		},
+	},
+	[ALC269VB_FIXUP_AYN_SPKR_PIN_FIX] = {
+	        .type = HDA_FIXUP_PINS,
+	        .v.pins = (const struct hda_pintbl[]) {
+	                { 0x14, 0x40f000f0 },  /* not connected */
+	                { 0x1a, 0x90170150 },  /* speaker */
+	                { }
+	        },
 	},
 	[ALC269_FIXUP_LIMIT_INT_MIC_BOOST_MUTE_LED] = {
 		.type = HDA_FIXUP_FUNC,
@@ -10801,6 +10816,7 @@ static const struct hda_model_fixup alc269_fixup_models[] = {
 	{.id = ALC269VB_FIXUP_ASUS_ZENBOOK_UX31A, .name = "asus-zenbook-ux31a"},
 	{.id = ALC269VB_FIXUP_ORDISSIMO_EVE2, .name = "ordissimo"},
 	{.id = ALC269VB_FIXUP_AYANEO_SPKR_PIN_FIX, .name = "ayaneo-speaker-pin-fix"},
+	{.id = ALC269VB_FIXUP_AYN_SPKR_PIN_FIX, .name = "ayn-speaker-pin-fix"},
 	{.id = ALC282_FIXUP_ASUS_TX300, .name = "asus-tx300"},
 	{.id = ALC283_FIXUP_INT_MIC, .name = "alc283-int-mic"},
 	{.id = ALC290_FIXUP_MONO_SPEAKERS_HSJACK, .name = "mono-speakers"},
