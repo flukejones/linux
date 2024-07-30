@@ -7550,7 +7550,7 @@ static void alc269_fixup_match_via_dmi(struct hda_codec *codec,
 {
 	int alc269_fix_id;
 	const char *board_name = dmi_get_system_info(DMI_BOARD_NAME);
-	
+
 	if (dmi_name_in_vendors("AYANEO") || dmi_name_in_vendors("AYADEVICE") || dmi_name_in_vendors("AYA DEVICE")) {
 		codec_dbg(codec, "Board Vendor: Ayaneo\n");
 		if (board_name && (strcmp(board_name, "AYANEO 2") || strcmp(board_name, "AYANEO 2S") || strcmp(board_name, "GEEK") || strcmp(board_name, "GEEK 1S"))) {
