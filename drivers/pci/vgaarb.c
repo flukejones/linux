@@ -620,9 +620,11 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 	 * We always prefer a firmware default device, so if we've already
 	 * found one, there's no need to consider vgadev.
 	 */
-	if (boot_vga && boot_vga->is_firmware_default)
-		return false;
+	if (boot_vga && boot_vga->is_firmware_default){
+	pr_info("boot_vga->is_firmware_default: %d", boot_vga->is_firmware_default);
+	return false;}
 
+	pr_info("vga_is_firmware_default(pdev): %d", vga_is_firmware_default(pdev));
 	if (vga_is_firmware_default(pdev)) {
 		vgadev->is_firmware_default = true;
 		return true;
@@ -638,11 +640,14 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 	 * vgadev is no better.
 	 */
 	if (boot_vga &&
-	    (boot_vga->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK)
-		return false;
+	    (boot_vga->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK){
+		pr_info("(boot_vga->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK): %d", (boot_vga->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK);
+						return false;}
 
-	if ((vgadev->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK)
+	if ((vgadev->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK){
+		pr_info("(vgadev->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK): %d", (vgadev->owns & VGA_RSRC_LEGACY_MASK) == VGA_RSRC_LEGACY_MASK);
 		return true;
+	}
 
 	/*
 	 * If we haven't found a legacy VGA device, accept a non-legacy
@@ -651,6 +656,7 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 	 * use legacy VGA resources.  Prefer an integrated GPU over others.
 	 */
 	pci_read_config_word(pdev, PCI_COMMAND, &cmd);
+	pr_info("cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY): %d", cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY));
 	if (cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY)) {
 
 		/*
@@ -659,6 +665,7 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 		 * there are more, we use the *last* because that was the
 		 * previous behavior.
 		 */
+		pr_info("vga_arb_integrated_gpu(&pdev->dev): %d", vga_arb_integrated_gpu(&pdev->dev));
 		if (vga_arb_integrated_gpu(&pdev->dev))
 			return true;
 
@@ -669,8 +676,9 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 		if (boot_vga) {
 			pci_read_config_word(boot_vga->pdev, PCI_COMMAND,
 					     &boot_cmd);
-			if (boot_cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY))
-				return false;
+			if (boot_cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY)){
+				pr_info("boot_cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY): %d", boot_cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY));
+				return false;}
 		}
 		return true;
 	}
@@ -679,6 +687,7 @@ static bool vga_is_boot_device(struct vga_device *vgadev)
 	 * Vgadev has neither IO nor MEM enabled.  If we haven't found any
 	 * other VGA devices, it is the best candidate so far.
 	 */
+	pr_info("end-of-func: boot_vga: %d", boot_vga);
 	if (!boot_vga)
 		return true;
 
