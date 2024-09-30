@@ -232,18 +232,12 @@ struct ally_x_device {
 
 struct ally_rgb_leds {
 	struct hid_device *hdev;
-	/* Need two dev here to enable the 3 step brightness */
-	struct led_classdev led_bright_dev;
 	struct led_classdev_mc led_rgb_dev;
 	struct work_struct work;
 	bool output_worker_initialized;
 	spinlock_t lock;
 
 	bool removed;
-
-	/* Update the main brightness 0-2 using a single raw write */
-	bool update_bright;
-	unsigned int brightness;
 
 	/* Update the RGB only to keep write efficient */
 	bool update_rgb;
@@ -252,7 +246,9 @@ struct ally_rgb_leds {
 	uint8_t gamepad_blue[4];
 
 	/* Once the RGB is toggled this is set until next boot */
-	bool rgb_software_mode;
+	bool set_bright_max;
+	int last_base_brightness;
+	int current_base_brightness;
 };
 
 /* ROG Ally has many settings related to the gamepad, all using the same n-key endpoint */
@@ -1913,7 +1909,7 @@ static void ally_led_set_static_from_multicolour(void)
 	u8 buf[] = { FEATURE_KBD_LED_REPORT_ID1, 0xb3, 0x00, 0x00, 0x00, 0x00, 0x00,
 		     0x00, 0x00, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
 
-	if (!drvdata.led_rgb || drvdata.led_rgb->removed || !drvdata.led_rgb->rgb_software_mode)
+	if (!drvdata.led_rgb || drvdata.led_rgb->removed || !drvdata.led_rgb->set_bright_max)
 		return;
 
 	/* Set single zone single colour based on the first LED of EC software mode */
@@ -1930,37 +1926,18 @@ static void ally_led_set_static_from_multicolour(void)
 		hid_err(led->hdev, "Ally failed to set static colour\n");
 }
 
-static void ally_led_do_brightness(struct work_struct *work)
+static int ally_led_set_base_brightness(struct hid_device *hdev, int brightness)
 {
-	struct ally_rgb_leds *led = container_of(work, struct ally_rgb_leds, work);
-	u8 buf[] = { FEATURE_ROG_ALLY_REPORT_ID, 0xba, 0xc5, 0xc4, 0x00 };
-	unsigned long flags;
-	bool do_rgb = false;
+	u8 buf[] = { FEATURE_ROG_ALLY_REPORT_ID, 0xba, 0xc5, 0xc4, brightness };
 
-	spin_lock_irqsave(&led->lock, flags);
-	if (!led->update_bright) {
-		spin_unlock_irqrestore(&led->lock, flags);
-		return;
-	}
-	led->update_bright = false;
-	do_rgb = led->rgb_software_mode;
-	buf[4] = led->brightness;
-	spin_unlock_irqrestore(&led->lock, flags);
-
-	if (asus_dev_set_report(led->hdev, buf, sizeof(buf)) < 0)
-		hid_err(led->hdev, "Ally failed to set backlight\n");
-
-	if (do_rgb) {
-		led->update_rgb = true;
-		ally_schedule_work(led);
-	}
+	return asus_dev_set_report(hdev, buf, sizeof(buf));
 }
 
 static void ally_led_do_rgb(struct work_struct *work)
 {
 	struct ally_rgb_leds *led = container_of(work, struct ally_rgb_leds, work);
+	int ret, cur_bright, last_bright;
 	unsigned long flags;
-	int ret;
 
 	u8 buf[16] = { [0] = FEATURE_ROG_ALLY_REPORT_ID,
 		       [1] = FEATURE_ROG_ALLY_CODE_PAGE,
@@ -1972,51 +1949,28 @@ static void ally_led_do_rgb(struct work_struct *work)
 		spin_unlock_irqrestore(&led->lock, flags);
 		return;
 	}
+
 	for (int i = 0; i < 4; i++) {
 		buf[4 + i * 3] = led->gamepad_red[i];
 		buf[5 + i * 3] = led->gamepad_green[i];
 		buf[6 + i * 3] = led->gamepad_blue[i];
 	}
 	led->update_rgb = false;
+
+	cur_bright = led->current_base_brightness;
+	last_bright = led->last_base_brightness;
+	led->last_base_brightness = led->current_base_brightness;
 	spin_unlock_irqrestore(&led->lock, flags);
+
+	if (cur_bright != last_bright) {
+		ret = ally_led_set_base_brightness(led->hdev, cur_bright);
+		if (ret < 0)
+			hid_err(led->hdev, "Ally failed to set gamepad base brightness: %d\n", ret);
+	}
 
 	ret = asus_dev_set_report(led->hdev, buf, sizeof(buf));
 	if (ret < 0)
 		hid_err(led->hdev, "Ally failed to set gamepad backlight: %d\n", ret);
-}
-
-static void ally_led_work(struct work_struct *work)
-{
-	ally_led_do_brightness(work);
-	ally_led_do_rgb(work);
-}
-
-static void ally_backlight_set(struct led_classdev *led_cdev, enum led_brightness brightness)
-{
-	struct ally_rgb_leds *led =
-		container_of(led_cdev, struct ally_rgb_leds, led_bright_dev);
-	unsigned long flags;
-
-	spin_lock_irqsave(&led->lock, flags);
-	led->update_bright = true;
-	led->brightness = brightness;
-	spin_unlock_irqrestore(&led->lock, flags);
-
-	ally_schedule_work(led);
-}
-
-static enum led_brightness ally_backlight_get(struct led_classdev *led_cdev)
-{
-	struct ally_rgb_leds *led =
-		container_of(led_cdev, struct ally_rgb_leds, led_bright_dev);
-	enum led_brightness brightness;
-	unsigned long flags;
-
-	spin_lock_irqsave(&led->lock, flags);
-	brightness = led->brightness;
-	spin_unlock_irqrestore(&led->lock, flags);
-
-	return brightness;
 }
 
 static void ally_set_rgb(struct led_classdev *cdev, enum led_brightness brightness)
@@ -2029,7 +1983,6 @@ static void ally_set_rgb(struct led_classdev *cdev, enum led_brightness brightne
 	led_mc_calc_color_components(mc_cdev, brightness);
 	spin_lock_irqsave(&led->lock, flags);
 	led->update_rgb = true;
-	led->rgb_software_mode = true;
 	bright = mc_cdev->led_cdev.brightness;
 	for (int i = 0; i < 4; i++) {
 		intensity = mc_cdev->subled_info[i].intensity;
@@ -2037,23 +1990,10 @@ static void ally_set_rgb(struct led_classdev *cdev, enum led_brightness brightne
 		led->gamepad_green[i] = (((intensity >> 8) & 0xFF) * bright) / 255;
 		led->gamepad_blue[i] = ((intensity & 0xFF) * bright) / 255;
 	}
+	led->current_base_brightness = bright ? 3 : 0;
 	spin_unlock_irqrestore(&led->lock, flags);
 
 	ally_schedule_work(led);
-}
-
-static int ally_gamepad_register_brightness(struct hid_device *hdev,
-					    struct ally_rgb_leds *led_rgb)
-{
-	struct led_classdev *led_cdev;
-
-	led_cdev = &led_rgb->led_bright_dev;
-	led_cdev->name = "asus::kbd_backlight"; /* Let a desktop control it also */
-	led_cdev->max_brightness = 3;
-	led_cdev->brightness_set = ally_backlight_set;
-	led_cdev->brightness_get = ally_backlight_get;
-
-	return devm_led_classdev_register(&hdev->dev, &led_rgb->led_bright_dev);
 }
 
 static int ally_gamepad_register_rgb_leds(struct hid_device *hdev,
@@ -2087,6 +2027,7 @@ static int ally_gamepad_register_rgb_leds(struct hid_device *hdev,
 static struct ally_rgb_leds *ally_gamepad_rgb_create(struct hid_device *hdev)
 {
 	struct ally_rgb_leds *led_rgb;
+	unsigned long flags;
 	int ret;
 
 	led_rgb = devm_kzalloc(&hdev->dev, sizeof(struct ally_rgb_leds), GFP_KERNEL);
@@ -2100,29 +2041,18 @@ static struct ally_rgb_leds *ally_gamepad_rgb_create(struct hid_device *hdev)
 		return ERR_PTR(ret);
 	}
 
-	ret = ally_gamepad_register_brightness(hdev, led_rgb);
-	if (ret < 0) {
-		cancel_work_sync(&led_rgb->work);
-		devm_kfree(&hdev->dev, led_rgb);
-		return ERR_PTR(ret);
-	}
-
 	led_rgb->hdev = hdev;
-	led_rgb->brightness = 3;
 	led_rgb->removed = false;
+	led_rgb->current_base_brightness = 3;
+	led_rgb->last_base_brightness = 0;
 
-	for (int i = 0; i < 4; i++) {
-		led_rgb->gamepad_red[i] = 255;
-		led_rgb->gamepad_green[i] = 255;
-		led_rgb->gamepad_blue[i] = 255;
-	}
-
-	INIT_WORK(&led_rgb->work, ally_led_work);
+	INIT_WORK(&led_rgb->work, ally_led_do_rgb);
 	led_rgb->output_worker_initialized = true;
 	spin_lock_init(&led_rgb->lock);
 
-	led_rgb->update_bright = true;
-	ally_schedule_work(led_rgb);
+	spin_lock_irqsave(&led_rgb->lock, flags);
+	ally_led_set_base_brightness(hdev, 3);
+	spin_unlock_irqrestore(&led_rgb->lock, flags);
 
 	return led_rgb;
 }
@@ -2388,7 +2318,7 @@ static void ally_hid_remove(struct hid_device *hdev)
 static int ally_hid_resume(struct hid_device *hdev)
 {
 	if (drvdata.led_rgb && drvdata.led_rgb->output_worker_initialized) {
-		drvdata.led_rgb->update_bright = true;
+		drvdata.led_rgb->update_rgb = true;
 		ally_schedule_work(drvdata.led_rgb);
 	}
 
