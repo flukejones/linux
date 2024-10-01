@@ -45,6 +45,8 @@ static const u8 EC_MODE_LED_APPLY[] = {0x5d, 0xb4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 static const u8 EC_MODE_LED_SET[] = {0x5d, 0xb5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 static const u8 FORCE_FEEDBACK_OFF[] = { 0x0D, 0x0F, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0xEB };
 
+static u8 get_endpoint_address(struct hid_device *hdev);
+
 static const struct hid_device_id rog_ally_devices[] = {
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK, USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY)},
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK, USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY_X)},
@@ -624,12 +626,19 @@ static void ally_x_remove(struct hid_device *hdev)
 {
 	struct ally_x_device *ally_x = drvdata.ally_x;
 	unsigned long flags;
+	int ep;
+
+	ep = get_endpoint_address(hdev);
+	if (ep != ALLY_X_INTERFACE_ADDRESS)
+		return;
 
 	spin_lock_irqsave(&ally_x->lock, flags);
 	ally_x->output_worker_initialized = false;
 	spin_unlock_irqrestore(&ally_x->lock, flags);
 	cancel_work_sync(&ally_x->output_worker);
 	sysfs_remove_file(&hdev->dev.kobj, &dev_attr_ally_x_qam_mode.attr);
+
+	hid_info(hdev, "Removed Ally X interface");
 }
 
 /**************************************************************************************************/
@@ -1851,7 +1860,6 @@ static struct ally_gamepad_cfg *ally_gamepad_cfg_create(struct hid_device *hdev)
 		ally_cfg->vibration_intensity[i][0] = 64;
 		ally_cfg->vibration_intensity[i][1] = 64;
 	}
-	drvdata.gamepad_cfg = ally_cfg;
 
 	/* ignore all errors for this as they are related to USB HID I/O */
 	__gamepad_mapping_xpad_default(ally_cfg);
@@ -1885,8 +1893,16 @@ free_ally_cfg:
 
 static void ally_cfg_remove(struct hid_device *hdev)
 {
+	int ep;
+
+	ep = get_endpoint_address(hdev);
+	if (ep != ALLY_CFG_INTF_IN_ADDRESS)
+		return;
+
 	__gamepad_set_mode(hdev, drvdata.gamepad_cfg, xpad_mode_mouse);
 	sysfs_remove_groups(&hdev->dev.kobj, gamepad_device_attr_groups);
+
+	hid_info(hdev, "Removed Ally config interface");
 }
 
 /**************************************************************************************************/
@@ -2027,7 +2043,6 @@ static int ally_gamepad_register_rgb_leds(struct hid_device *hdev,
 static struct ally_rgb_leds *ally_gamepad_rgb_create(struct hid_device *hdev)
 {
 	struct ally_rgb_leds *led_rgb;
-	unsigned long flags;
 	int ret;
 
 	led_rgb = devm_kzalloc(&hdev->dev, sizeof(struct ally_rgb_leds), GFP_KERNEL);
@@ -2050,9 +2065,7 @@ static struct ally_rgb_leds *ally_gamepad_rgb_create(struct hid_device *hdev)
 	led_rgb->output_worker_initialized = true;
 	spin_lock_init(&led_rgb->lock);
 
-	spin_lock_irqsave(&led_rgb->lock, flags);
 	ally_led_set_base_brightness(hdev, 3);
-	spin_unlock_irqrestore(&led_rgb->lock, flags);
 
 	return led_rgb;
 }
@@ -2061,12 +2074,20 @@ static void ally_rgb_remove(struct hid_device *hdev)
 {
 	struct ally_rgb_leds *led_rgb = drvdata.led_rgb;
 	unsigned long flags;
+	int ep;
+
+	ep = get_endpoint_address(hdev);
+	if (ep != ALLY_CFG_INTF_IN_ADDRESS)
+		return;
 
 	spin_lock_irqsave(&led_rgb->lock, flags);
 	led_rgb->removed = true;
 	led_rgb->output_worker_initialized = false;
 	spin_unlock_irqrestore(&led_rgb->lock, flags);
 	cancel_work_sync(&led_rgb->work);
+	devm_led_classdev_multicolor_unregister(&hdev->dev, &led_rgb->led_rgb_dev);
+
+	hid_info(hdev, "Removed Ally RGB interface");
 }
 
 /**************************************************************************************************/
@@ -2160,13 +2181,28 @@ cleanup:
 	return ret;
 }
 
-static void maybe_mcu_version_warn(struct hid_device *hdev, int minv, int version) {
+static void maybe_mcu_version_warn(struct hid_device *hdev, int idProduct) {
+	int min_version, version;
+
+	min_version = 0;
+	version = ally_request_mcu_version(hdev);
+	if (version) {
+		switch (idProduct) {
+		case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY:
+			min_version = ALLY_MIN_BIOS;
+			break;
+		case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY_X:
+			min_version = ALLY_X_MIN_BIOS;
+			break;
+		}
+	}
+
 	hid_info(hdev, "Ally device MCU version: %d\n", version);
-	if (version <= minv) {
+	if (version <= min_version) {
 		hid_warn(hdev, "The MCU version must be %d or greater\n"
 				"Please update your MCU with official ASUS firmware release "
 				"which has bug fixes to make the Linux experience better\n",
-				minv);
+				min_version);
 	}
 }
 
@@ -2208,16 +2244,35 @@ static int ally_gamepad_init_start(struct hid_device *hdev)
 	return ret;
 }
 
+static u8 get_endpoint_address(struct hid_device *hdev) {
+	struct usb_interface *intf;
+	struct usb_host_endpoint *ep;
+
+	intf = to_usb_interface(hdev->dev.parent);
+
+	if (intf) {
+		ep = intf->cur_altsetting->endpoint;
+		if (ep) {
+			return ep->desc.bEndpointAddress;
+		}
+	}
+
+	return -ENODEV;
+}
+
 static int ally_probe(struct hid_device *hdev, const struct hid_device_id *id)
 {
 	struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
-	struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
 	struct usb_device *udev = interface_to_usbdev(intf);
 	u16 idProduct = le16_to_cpu(udev->descriptor.idProduct);
-	int ret;
+	int ret, ep;
 
-	if (ep->desc.bEndpointAddress != ALLY_CFG_INTF_IN_ADDRESS &&
-	    ep->desc.bEndpointAddress != ALLY_X_INTERFACE_ADDRESS)
+	ep = get_endpoint_address(hdev);
+	if (ep < 0)
+		return ep;
+
+	if (ep != ALLY_CFG_INTF_IN_ADDRESS &&
+	    ep != ALLY_X_INTERFACE_ADDRESS)
 		return -ENODEV;
 
 	ret = hid_parse(hdev);
@@ -2247,18 +2302,8 @@ static int ally_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	hid_set_drvdata(hdev, &drvdata);
 
 	/* This should almost always exist */
-	if (ep->desc.bEndpointAddress == ALLY_CFG_INTF_IN_ADDRESS) {
-		ret = ally_request_mcu_version(hdev);
-		if (ret) {
-			switch (idProduct) {
-			case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY:
-				maybe_mcu_version_warn(hdev, ALLY_MIN_BIOS, ret);
-				break;
-			case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY_X:
-				maybe_mcu_version_warn(hdev, ALLY_X_MIN_BIOS, ret);
-				break;
-			}
-		}
+	if (ep == ALLY_CFG_INTF_IN_ADDRESS) {
+		maybe_mcu_version_warn(hdev, idProduct);
 
 		drvdata.led_rgb = ally_gamepad_rgb_create(hdev);
 		if (IS_ERR(drvdata.led_rgb))
@@ -2266,7 +2311,7 @@ static int ally_probe(struct hid_device *hdev, const struct hid_device_id *id)
 		else
 			hid_info(hdev, "Created Ally RGB LED controls.\n");
 
-		ally_gamepad_cfg_create(hdev); // assigns self
+		drvdata.gamepad_cfg = ally_gamepad_cfg_create(hdev);
 		if (IS_ERR(drvdata.gamepad_cfg))
 			hid_err(hdev, "Failed to create Ally gamepad attributes.\n");
 		else
@@ -2277,7 +2322,7 @@ static int ally_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	}
 
 	/* May or may not exist */
-	if (ep->desc.bEndpointAddress == ALLY_X_INTERFACE_ADDRESS) {
+	if (ep == ALLY_X_INTERFACE_ADDRESS) {
 		drvdata.ally_x = ally_x_create(hdev);
 		if (IS_ERR(drvdata.ally_x)) {
 			hid_err(hdev, "Failed to create Ally X gamepad.\n");
