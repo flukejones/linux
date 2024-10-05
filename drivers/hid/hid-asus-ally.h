@@ -23,12 +23,14 @@ enum xpad_cmd {
 	xpad_cmd_set_mapping = 0x02,
 	xpad_cmd_set_leds = 0x08,
 	xpad_cmd_check_ready = 0x0A,
+	xpad_cmd_set_turbo = 0x0F,
 };
 
 /* the xpad_cmd determines which feature is set or queried */
 enum xpad_cmd_len {
 	xpad_cmd_len_mapping = 0x2c,
 	xpad_cmd_len_leds = 0x0C,
+	xpad_cmd_len_turbo = 0x20,
 };
 
 /* Values correspond to the actual HID byte value required */
@@ -222,6 +224,37 @@ enum btn_pair_index {
 		return count;                                                  \
 	}
 
+#define ALLY_TURBO_SHOW(_fname, _btn_name)                                     \
+	static ssize_t _fname##_show(struct device *dev,                       \
+				     struct device_attribute *attr, char *buf) \
+	{                                                                      \
+		struct ally_gamepad_cfg *ally_cfg = drvdata.gamepad_cfg;       \
+		struct btn_data *btn;                                          \
+		if (!drvdata.gamepad_cfg)                                      \
+			return -ENODEV;                                        \
+		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]->_btn_name;   \
+		return sysfs_emit(buf, "%d\n", btn->turbo);                    \
+	}
+
+#define ALLY_TURBO_STORE(_fname, _btn_name)                                    \
+	static ssize_t _fname##_store(struct device *dev,                      \
+				      struct device_attribute *attr,           \
+				      const char *buf, size_t count)           \
+	{                                                                      \
+		struct ally_gamepad_cfg *ally_cfg = drvdata.gamepad_cfg;       \
+		struct btn_data *btn;                                          \
+		bool turbo;                                                    \
+		int ret; \
+		if (!drvdata.gamepad_cfg)                                      \
+			return -ENODEV;                                        \
+		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]->_btn_name;   \
+		ret = kstrtobool(buf, &turbo);                                 \
+		if (ret)                                                       \
+			return ret;                                            \
+		btn->turbo = turbo;                                            \
+		return count;                                                  \
+	}
+
 #define ALLY_BTN_ATTRS_GROUP(_name, _fname)                               \
 	static struct attribute *_fname##_attrs[] = {                     \
 		&dev_attr_##_fname.attr,                                  \
@@ -232,11 +265,32 @@ enum btn_pair_index {
 		.attrs = _fname##_attrs,                                  \
 	}
 
-#define ALLY_BTN_MAPPING(_fname, _mname)                                \
+#define ALLY_BTN_ATTRS_GROUP_WITH_TURBO(_name, _fname)                    \
+	static struct attribute *_fname##_attrs[] = {                     \
+		&dev_attr_##_fname.attr,                                  \
+		&dev_attr_##_fname##_macro.attr,                          \
+		&dev_attr_##_fname##_turbo.attr,                          \
+	};                                                                \
+	static const struct attribute_group _fname##_attr_group = {       \
+		.name = __stringify(_name),                               \
+		.attrs = _fname##_attrs,                                  \
+	}
+
+#define _ALLY_BTN_MAPPING(_fname, _mname)                               \
 	ALLY_BTN_SHOW(btn_mapping_##_fname, _mname, false);             \
 	ALLY_BTN_STORE(btn_mapping_##_fname, _mname, false);            \
 	ALLY_BTN_SHOW(btn_mapping_##_fname##_macro, _mname, true);      \
 	ALLY_BTN_STORE(btn_mapping_##_fname##_macro, _mname, true);     \
 	ALLY_DEVICE_ATTR_RW(btn_mapping_##_fname, remap);               \
-	ALLY_DEVICE_ATTR_RW(btn_mapping_##_fname##_macro, macro_remap); \
+	ALLY_DEVICE_ATTR_RW(btn_mapping_##_fname##_macro, macro_remap);
+
+#define ALLY_BTN_MAPPING_NO_TURBO(_fname, _mname)                          \
+	_ALLY_BTN_MAPPING(_fname, _mname)                                  \
 	ALLY_BTN_ATTRS_GROUP(btn_##_fname, btn_mapping_##_fname)
+
+#define ALLY_BTN_MAPPING_WITH_TURBO(_fname, _mname)                        \
+	_ALLY_BTN_MAPPING(_fname, _mname)                                  \
+	ALLY_TURBO_SHOW(btn_mapping_##_fname##_turbo, _mname);             \
+	ALLY_TURBO_STORE(btn_mapping_##_fname##_turbo, _mname);            \
+	ALLY_DEVICE_ATTR_RW(btn_mapping_##_fname##_turbo, turbo);          \
+	ALLY_BTN_ATTRS_GROUP_WITH_TURBO(btn_##_fname, btn_mapping_##_fname)
