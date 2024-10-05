@@ -22,6 +22,7 @@ enum xpad_mode {
 enum xpad_cmd {
 	xpad_cmd_set_mode = 0x01,
 	xpad_cmd_set_mapping = 0x02,
+	xpad_cmd_set_vibe_intensity = 0x06,
 	xpad_cmd_set_leds = 0x08,
 	xpad_cmd_check_ready = 0x0A,
 	xpad_cmd_set_turbo = 0x0F,
@@ -31,6 +32,7 @@ enum xpad_cmd {
 enum xpad_cmd_len {
 	xpad_cmd_len_mode = 0x01,
 	xpad_cmd_len_mapping = 0x2c,
+	xpad_cmd_len_vibe_intensity = 0x02,
 	xpad_cmd_len_leds = 0x0C,
 	xpad_cmd_len_turbo = 0x20,
 };
@@ -192,6 +194,10 @@ enum btn_pair_index {
 	struct device_attribute dev_attr_##_name = \
 		__ATTR(_sysfs_name, 0644, _name##_show, _name##_store)
 
+#define ALLY_DEVICE_ATTR_RO(_name, _sysfs_name)    \
+	struct device_attribute dev_attr_##_name = \
+		__ATTR(_sysfs_name, 0444, _name##_show, NULL)
+
 /* button specific macros */
 #define ALLY_BTN_SHOW(_fname, _btn_name, _secondary)                           \
 	static ssize_t _fname##_show(struct device *dev,                       \
@@ -234,7 +240,7 @@ enum btn_pair_index {
 		struct btn_data *btn;                                          \
 		if (!drvdata.gamepad_cfg)                                      \
 			return -ENODEV;                                        \
-		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]->_btn_name;   \
+		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]._btn_name;   \
 		return sysfs_emit(buf, "%d\n", btn->turbo);                    \
 	}
 
@@ -249,7 +255,7 @@ enum btn_pair_index {
 		int ret; \
 		if (!drvdata.gamepad_cfg)                                      \
 			return -ENODEV;                                        \
-		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]->_btn_name;   \
+		btn = &ally_cfg->key_mapping[ally_cfg->mode - 1]._btn_name;   \
 		ret = kstrtobool(buf, &turbo);                                 \
 		if (ret)                                                       \
 			return ret;                                            \
