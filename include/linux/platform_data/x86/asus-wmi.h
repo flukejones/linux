@@ -243,6 +243,11 @@ static const struct dmi_system_id asus_use_hid_led_dmi_ids[] = {
 			DMI_MATCH(DMI_BOARD_NAME, "RC71L"),
 		},
 	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BOARD_NAME, "UX8406"),
+		},
+	},
 	{ },
 };
 
