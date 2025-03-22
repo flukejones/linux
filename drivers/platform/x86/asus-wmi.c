@@ -1950,9 +1950,9 @@ static void asus_wmi_led_exit(struct asus_wmi *asus)
 
 	spin_lock_irqsave(&asus_ref.lock, flags);
 	asus_ref.asus = NULL;
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
 	if (asus->kbd_led_registered)
 		led_classdev_unregister(&asus->kbd_led);
-	spin_unlock_irqrestore(&asus_ref.lock, flags);
 
 	led_classdev_unregister(&asus->tpd_led);
 	led_classdev_unregister(&asus->wlan_led);
