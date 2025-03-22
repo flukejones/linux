@@ -254,6 +254,8 @@ struct asus_wmi {
 	int tpd_led_wk;
 	struct led_classdev kbd_led;
 	int kbd_led_wk;
+	bool kbd_led_avail;
+	bool kbd_led_registered;
 	struct led_classdev lightbar_led;
 	int lightbar_led_wk;
 	struct led_classdev micmute_led;
@@ -1611,6 +1613,53 @@ static void asus_wmi_battery_exit(struct asus_wmi *asus)
 
 /* LEDs ***********************************************************************/
 
+struct asus_hid_ref {
+	struct list_head listeners;
+	struct asus_wmi *asus;
+	spinlock_t lock;
+};
+
+struct asus_hid_ref asus_ref = {
+	.listeners = LIST_HEAD_INIT(asus_ref.listeners),
+	.asus = NULL,
+	.lock = __SPIN_LOCK_UNLOCKED(asus_ref.lock),
+};
+
+int asus_hid_register_listener(struct asus_hid_listener *bdev)
+{
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	list_add_tail(&bdev->list, &asus_ref.listeners);
+	if (asus_ref.asus) {
+		if (asus_ref.asus->kbd_led_registered && asus_ref.asus->kbd_led_wk >= 0)
+			bdev->brightness_set(bdev, asus_ref.asus->kbd_led_wk);
+
+		if (!asus_ref.asus->kbd_led_registered) {
+			ret = led_classdev_register(
+				&asus_ref.asus->platform_device->dev,
+				&asus_ref.asus->kbd_led);
+			if (!ret)
+				asus_ref.asus->kbd_led_registered = true;
+		}
+	}
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(asus_hid_register_listener);
+
+void asus_hid_unregister_listener(struct asus_hid_listener *bdev)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	list_del(&bdev->list);
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
+}
+EXPORT_SYMBOL_GPL(asus_hid_unregister_listener);
+
 /*
  * These functions actually update the LED's, and are called from a
  * workqueue. By doing this as separate work rather than when the LED
@@ -1690,6 +1739,7 @@ static int kbd_led_read(struct asus_wmi *asus, int *level, int *env)
 
 static void do_kbd_led_set(struct led_classdev *led_cdev, int value)
 {
+	struct asus_hid_listener *listener;
 	struct asus_wmi *asus;
 	int max_level;
 
@@ -1697,25 +1747,39 @@ static void do_kbd_led_set(struct led_classdev *led_cdev, int value)
 	max_level = asus->kbd_led.max_brightness;
 
 	asus->kbd_led_wk = clamp_val(value, 0, max_level);
-	kbd_led_update(asus);
+
+	if (asus->kbd_led_avail)
+		kbd_led_update(asus);
+
+	list_for_each_entry(listener, &asus_ref.listeners, list)
+		listener->brightness_set(listener, asus->kbd_led_wk);
 }
 
 static void kbd_led_set(struct led_classdev *led_cdev,
 			enum led_brightness value)
 {
+	unsigned long flags;
+
 	/* Prevent disabling keyboard backlight on module unregister */
 	if (led_cdev->flags & LED_UNREGISTERING)
 		return;
 
+	spin_lock_irqsave(&asus_ref.lock, flags);
 	do_kbd_led_set(led_cdev, value);
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
 }
 
 static void kbd_led_set_by_kbd(struct asus_wmi *asus, enum led_brightness value)
 {
-	struct led_classdev *led_cdev = &asus->kbd_led;
+	struct led_classdev *led_cdev;
+	unsigned long flags;
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	led_cdev = &asus->kbd_led;
 
 	do_kbd_led_set(led_cdev, value);
 	led_classdev_notify_brightness_hw_changed(led_cdev, asus->kbd_led_wk);
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
 }
 
 static enum led_brightness kbd_led_get(struct led_classdev *led_cdev)
@@ -1724,6 +1788,9 @@ static enum led_brightness kbd_led_get(struct led_classdev *led_cdev)
 	int retval, value;
 
 	asus = container_of(led_cdev, struct asus_wmi, kbd_led);
+
+	if (!asus->kbd_led_avail)
+		return asus->kbd_led_wk;
 
 	retval = kbd_led_read(asus, &value, NULL);
 	if (retval < 0)
@@ -1840,7 +1907,14 @@ static int camera_led_set(struct led_classdev *led_cdev,
 
 static void asus_wmi_led_exit(struct asus_wmi *asus)
 {
-	led_classdev_unregister(&asus->kbd_led);
+	unsigned long flags;
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	asus_ref.asus = NULL;
+	if (asus->kbd_led_registered)
+		led_classdev_unregister(&asus->kbd_led);
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
+
 	led_classdev_unregister(&asus->tpd_led);
 	led_classdev_unregister(&asus->wlan_led);
 	led_classdev_unregister(&asus->lightbar_led);
@@ -1854,6 +1928,8 @@ static void asus_wmi_led_exit(struct asus_wmi *asus)
 static int asus_wmi_led_init(struct asus_wmi *asus)
 {
 	int rv = 0, num_rgb_groups = 0, led_val;
+	unsigned long flags;
+	bool has_listeners;
 
 	if (asus->kbd_rgb_dev)
 		kbd_rgb_mode_groups[num_rgb_groups++] = &kbd_rgb_mode_group;
@@ -1878,23 +1954,36 @@ static int asus_wmi_led_init(struct asus_wmi *asus)
 			goto error;
 	}
 
-	if (!kbd_led_read(asus, &led_val, NULL) && !dmi_check_system(asus_use_hid_led_dmi_ids)) {
-		pr_info("using asus-wmi for asus::kbd_backlight\n");
+	asus->kbd_led.name = "asus::kbd_backlight";
+	asus->kbd_led.flags = LED_BRIGHT_HW_CHANGED;
+	asus->kbd_led.brightness_set = kbd_led_set;
+	asus->kbd_led.brightness_get = kbd_led_get;
+	asus->kbd_led.max_brightness = 3;
+	asus->kbd_led_avail = !kbd_led_read(asus, &led_val, NULL);
+
+	if (asus->kbd_led_avail)
 		asus->kbd_led_wk = led_val;
-		asus->kbd_led.name = "asus::kbd_backlight";
-		asus->kbd_led.flags = LED_BRIGHT_HW_CHANGED;
-		asus->kbd_led.brightness_set = kbd_led_set;
-		asus->kbd_led.brightness_get = kbd_led_get;
-		asus->kbd_led.max_brightness = 3;
+	else
+		asus->kbd_led_wk = -1;
 
-		if (num_rgb_groups != 0)
-			asus->kbd_led.groups = kbd_rgb_mode_groups;
+	if (asus->kbd_led_avail && num_rgb_groups != 0)
+		asus->kbd_led.groups = kbd_rgb_mode_groups;
 
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	has_listeners = !list_empty(&asus_ref.listeners);
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
+
+	if (asus->kbd_led_avail || has_listeners) {
 		rv = led_classdev_register(&asus->platform_device->dev,
 					   &asus->kbd_led);
 		if (rv)
 			goto error;
+		asus->kbd_led_registered = true;
 	}
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	asus_ref.asus = asus;
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
 
 	if (asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_WIRELESS_LED)
 			&& (asus->driver->quirks->wapf > 0)) {
