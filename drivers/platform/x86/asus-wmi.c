@@ -1660,6 +1660,45 @@ void asus_hid_unregister_listener(struct asus_hid_listener *bdev)
 }
 EXPORT_SYMBOL_GPL(asus_hid_unregister_listener);
 
+static void do_kbd_led_set(struct led_classdev *led_cdev, int value);
+
+int asus_hid_event(enum asus_hid_event event)
+{
+	unsigned long flags;
+	int brightness;
+
+	spin_lock_irqsave(&asus_ref.lock, flags);
+	if (!asus_ref.asus || !asus_ref.asus->kbd_led_registered) {
+		spin_unlock_irqrestore(&asus_ref.lock, flags);
+		return -EBUSY;
+	}
+	brightness = asus_ref.asus->kbd_led_wk;
+
+	switch (event) {
+	case ASUS_EV_BRTUP:
+		brightness += 1;
+		break;
+	case ASUS_EV_BRTDOWN:
+		brightness -= 1;
+		break;
+	case ASUS_EV_BRTTOGGLE:
+		if (brightness >= 3)
+			brightness = 0;
+		else
+			brightness += 1;
+		break;
+	}
+
+	do_kbd_led_set(&asus_ref.asus->kbd_led, brightness);
+	led_classdev_notify_brightness_hw_changed(&asus_ref.asus->kbd_led,
+						  asus_ref.asus->kbd_led_wk);
+
+	spin_unlock_irqrestore(&asus_ref.lock, flags);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(asus_hid_event);
+
 /*
  * These functions actually update the LED's, and are called from a
  * workqueue. By doing this as separate work rather than when the LED
