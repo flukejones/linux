@@ -91,6 +91,7 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define QUIRK_ROG_NKEY_KEYBOARD		BIT(11)
 #define QUIRK_ROG_CLAYMORE_II_KEYBOARD BIT(12)
 #define QUIRK_ROG_ALLY_XPAD		BIT(13)
+#define QUIRK_HANDLE_GENERIC		BIT(14)
 
 #define I2C_KEYBOARD_QUIRKS			(QUIRK_FIX_NOTEBOOK_REPORT | \
 						 QUIRK_NO_INIT_REPORTS | \
@@ -127,7 +128,6 @@ struct asus_drvdata {
 	struct input_dev *tp_kbd_input;
 	struct asus_kbd_leds *kbd_backlight;
 	const struct asus_touchpad_info *tp;
-	bool enable_backlight;
 	struct power_supply *battery;
 	struct power_supply_desc battery_desc;
 	int battery_capacity;
@@ -332,6 +332,10 @@ static int asus_raw_event(struct hid_device *hdev,
 		struct hid_report *report, u8 *data, int size)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+
+	if (drvdata->quirks & QUIRK_HANDLE_GENERIC)
+		/* NOOP on generic HID devices to avoid side effects. */
+		return 0;
 
 	if (drvdata->battery && data[0] == BATTERY_REPORT_ID)
 		return asus_report_battery(drvdata, data, size);
@@ -882,6 +886,10 @@ static int asus_input_configured(struct hid_device *hdev, struct hid_input *hi)
 	struct input_dev *input = hi->input;
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
 
+	if (drvdata->quirks & QUIRK_HANDLE_GENERIC)
+		/* NOOP on generic HID devices to avoid side effects. */
+		return 0;
+
 	/* T100CHI uses MULTI_INPUT, bind the touchpad to the mouse hid_input */
 	if (drvdata->quirks & QUIRK_T100CHI &&
 	    hi->report->id != T100CHI_MOUSE_REPORT_ID)
@@ -935,11 +943,6 @@ static int asus_input_configured(struct hid_device *hdev, struct hid_input *hi)
 
 	drvdata->input = input;
 
-	if (drvdata->enable_backlight &&
-	    !asus_kbd_wmi_led_control_present(hdev) &&
-	    asus_kbd_register_leds(hdev))
-		hid_warn(hdev, "Failed to initialize backlight.\n");
-
 	return 0;
 }
 
@@ -958,6 +961,10 @@ static int asus_input_mapping(struct hid_device *hdev,
 		 */
 		return -1;
 	}
+
+	if (drvdata->quirks & QUIRK_HANDLE_GENERIC)
+		/* NOOP on generic HID devices to avoid side effects. */
+		return 0;
 
 	/*
 	 * Ignore a bunch of bogus collections in the T100CHI descriptor.
@@ -1008,15 +1015,6 @@ static int asus_input_mapping(struct hid_device *hdev,
 			 * as some make the keyboard appear as a pointer device. */
 			return -1;
 		}
-
-		/*
-		 * Check and enable backlight only on devices with UsagePage ==
-		 * 0xff31 to avoid initializing the keyboard firmware multiple
-		 * times on devices with multiple HID descriptors but same
-		 * PID/VID.
-		 */
-		if (drvdata->quirks & QUIRK_USE_KBD_BACKLIGHT)
-			drvdata->enable_backlight = true;
 
 		set_bit(EV_REP, hi->input->evbit);
 		return 1;
@@ -1134,10 +1132,12 @@ static int __maybe_unused asus_reset_resume(struct hid_device *hdev)
 
 static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 {
+	struct hid_report_enum *rep_enum;
 	struct asus_drvdata *drvdata;
 	struct usb_host_endpoint *ep;
 	struct usb_interface *intf;
-	int ret;
+	struct hid_report *rep;
+	int ret, is_vendor = 0;
 
 	drvdata = devm_kzalloc(&hdev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (drvdata == NULL) {
@@ -1233,11 +1233,44 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 		return ret;
 	}
 
+	/*
+	 * Check for the vendor interface (0xff31) to init the RGB.
+	 * and handle generic devices properly.
+	 */
+	rep_enum = &hdev->report_enum[HID_INPUT_REPORT];
+	list_for_each_entry(rep, &rep_enum->report_list, list) {
+		if ((rep->application & HID_USAGE_PAGE) == 0xff310000)
+			is_vendor = true;
+	}
+
+	/*
+	 * For ROG keyboards, make them hid compliant by
+	 * creating one input per application. For interfaces other than
+	 * the vendor one, disable hid-asus handlers.
+	 */
+	if (drvdata->quirks & QUIRK_ROG_NKEY_KEYBOARD) {
+		if (!is_vendor)
+			drvdata->quirks |= QUIRK_HANDLE_GENERIC;
+		hdev->quirks |= HID_QUIRK_INPUT_PER_APP;
+	}
+
 	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
 	if (ret) {
 		hid_err(hdev, "Asus hw start failed: %d\n", ret);
 		return ret;
 	}
+
+	if (is_vendor && (drvdata->quirks & QUIRK_USE_KBD_BACKLIGHT) &&
+	    !asus_kbd_wmi_led_control_present(hdev) &&
+	    asus_kbd_register_leds(hdev))
+		hid_warn(hdev, "Failed to initialize backlight.\n");
+
+	/*
+	 * For ROG keyboards, skip rename for consistency and
+	 * ->input check as some devices do not have inputs.
+	 */
+	if (drvdata->quirks & QUIRK_ROG_NKEY_KEYBOARD)
+		return 0;
 
 	if (!drvdata->input) {
 		hid_err(hdev, "Asus input not registered\n");
@@ -1288,6 +1321,10 @@ static const __u8 *asus_report_fixup(struct hid_device *hdev, __u8 *rdesc,
 		unsigned int *rsize)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
+
+	if (drvdata->quirks & QUIRK_HANDLE_GENERIC)
+		/* NOOP on generic HID devices to avoid side effects. */
+		return rdesc;
 
 	if (drvdata->quirks & QUIRK_FIX_NOTEBOOK_REPORT &&
 			*rsize >= 56 && rdesc[54] == 0x25 && rdesc[55] == 0x65) {
